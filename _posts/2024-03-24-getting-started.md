@@ -1,23 +1,21 @@
 ---
-title: Getting Started
+title: Where Should I Start?
 author: uzrg
 date: 2024-03-24 20:55:00 +0800
-categories: [Blogging, Tutorial, Scripting]
-tags: [getting started, PowerShell]
+categories: [Blogging, Tutorial, Scripting, Jekyll, Markdown]
+tags: [getting started, PowerShell, Git, GitHub, Jekyll, Markdown]
 pin: true
 img_path: "/posts/20240324"
 ---
 
-## Where Should We Start ?
-
-Thank you for visiting "My little corner on the web" where I will try to document helpful tutorials and helpful resources for IT Systems Administration Tasks.
-Since these modest web pages are hosted on github.io and built based on Jekyll .
-After some consideration, the first post is to document how the site is built, someone else may want to do the same and/or I may need to build another one in the future. It helps speed up things if the process is well documented, could save some serious time….
+Welcome to "My little corner on the web" where I aim to document helpful tutorials and resources for IT Systems Administration Tasks.
+These modest web pages are hosted on github.io and built based on Jekyll.
+After some consideration, the first post documents how the site is built, in case others may want to do the same and/or I may need to build another one in the future. Having the process well documented could save some serious time….
 
 ## So What is Jekyll ?
 
-[Jekyll](https://jekyllrb.com/) is a "static site generator" written in [Ruby](https://www.ruby-lang.org/en/) that takes [Markdown](https://www.markdownguide.org/getting-started/) text and transform it into responsive, static websites and blogs that can be freely hosted on GitHub Pages. Another Jekyll's advantage is the availability of free pre-built themes we can start from, the theme developers handled the heavy lifting so that we can only worry about customizations/branding and creating content. This website is based on the [Chirpy](https://chirpy.cotes.page/) theme. No need to know Ruby programming for this, my serious recommendation is to spend a sometime understanding [Markdown syntax](https://www.markdownguide.org/basic-syntax/) as after the site is built, it will be needed to create content.
-Even though Ruby Programming is not necessary, we need to install Ruby and Gems on the local development machine so that we can test the customizations locally and push to github once satisfied with how the site look.
+<a href="https://jekyllrb.com/" target="_blank">Jekyll</a> is a "static site generator" written in <a href="https://www.ruby-lang.org/en/" target="_blank">Ruby</a> that takes <a href="https://www.markdownguide.org/getting-started/" target="_blank">Markdown</a> text and transforms it into responsive, static websites that can be hosted on <a href="https://pages.github.com/" target="_blank">GitHub Pages</a> free of charge. Another advantage of Jekyll is the availability of many pre-built themes to jump-start development. Indeed, theme developers have done the heavy lifting so that users only need to worry about customizations/branding and creating content for their sites or blogs. This website is based on the <a href="https://chirpy.cotes.page/" target="_blank">Chirpy</a> theme. There's no need to know Ruby programming for this, but I advise spending some time understanding understanding <a href="https://www.markdownguide.org/basic-syntax/" target="_blank">Markdown syntax</a> as it will be needed to create content after the site is built.
+Even though Ruby Programming is not necessary, Ruby and Gems need to be installed on the local development machine to test the customizations locally before pushing to GitHub once satisfied with how the site looks.
 
 ## So What are the steps?
 
@@ -25,21 +23,22 @@ Even though Ruby Programming is not necessary, we need to install Ruby and Gems 
    ○ VSCode (Portable)
    ○ Git (Portable)
    ○ Ruby (Portable)
-2. Clone the Chripy theme into a local git repository
-3. Customize and test the site locally
+2. Clone the Chirpy theme into a local git repository
+3. Customize the site locally
    ○ Favicons
    ○ Avatar
    ○ Urls
-   ○ Contacts, authors, etc..
+   ○ Contacts, authors, share
    ○ Posts
-4. Push to GitHub for build and deploy
+4. Build and test site locally
+5. Push to GitHub, GitHub Pages URL, Build and Deploy Actions
 
-We can do each step one by one, but to speed up the process will use a PowerShell script to combine step 1 and 2.
-The following PowerShell download VSCode (Portable), PortableGit , Ruby Installer then install everything into a $devOpsPath\Tools directory .
-###Note that this is not a fully automated process as the PortableGit and Ruby installers will launch a wizard requiring manual intervention to continue.
-My recommended way to use the following PowerShell script is to turn it into a PowerShell Profile so that it is loaded each time a powershell console is launched. Note that it does try to download and install the various tools each time the $profile run, tools are installed the first time and subsequent runs only ensure the $env:path is updated.My prefered PowerShell Profile is the CurrentUserAllHosts located at ~\Documents\WindowsPowerShell\Profile.ps1
+Each step can be done one by one, but to speed up the process, I will use a PowerShell script to combine steps 1 and 2.
+The following PowerShell script downloads VSCode (Portable), PortableGit, and Ruby Installer, then installs everything into a $devOpsPath\Tools directory.
+**_Note that this is not a fully automated process as the PortableGit and Ruby installers will launch a wizard requiring manual intervention to continue._**
+I recommend using the following PowerShell script by turning it into a PowerShell Profile so that it is loaded each time a PowerShell console is launched. Note that it tries to download and install the various tools each time the $profile runs. Tools are installed the first time, and subsequent runs only ensure the $env:path is updated. My preferred PowerShell Profile is the CurrentUserAllHosts located at ~\Documents\WindowsPowerShell\Profile.ps1
 
-### PowerShell to Setup local dev environment and cloning Chirpy into a local repo
+### PowerShell to Setup local dev environment and cloning Chirpy into a local repo **_ this is for Windows OS and is provided "as is" no implied warranties or guarantees _**
 
 ```PowerShell
 <#
@@ -212,37 +211,45 @@ Write-Output "`nNavigate into the repo or  ''code  $devOpsPath\$($githubUser.Nam
 
 ```
 
-### Customize and test the site locally
+### Customize the site locally
 
-If you added the above PowerShell to a PS Profile, then you should be able to open the repo with vscode
+If you added the above PowerShell to a PS Profile, then you should be able to open the repo with VScode
 
-```Powershell
+```
 
-code C:\DevOps\<repo directory>
+code $devOpsPath\<repo directory>
 
 ```
 
 Once the repo is open, locate \_config.yml as a lot of customizations will be done there
 
-○ Favicons
-To customise Favicons with pictures of your own, please follow the [Customize the Favicon](https://chirpy.cotes.page/posts/customize-the-favicon/)
+#### Favicons
 
-○ Avatar
-To replace the avatar with your own pictures hosted on the site, place a 300\*300 pixels picture (mine is avatar.jpg) under assets\img then edit following lines from \_config.yml
+To customise Favicons with pictures of your own, please follow the <a href="https://chirpy.cotes.page/posts/customize-the-favicon/" target="_blank">Customize the Favicon</a>
+
+#### Avatar
+
+To replace the avatar with your own pictures hosted on the site, place a 300\*300 pixels picture (mine is named avatar.jpg) under assets\img then edit following lines from \_config.yml
+
 avatar: "/<your github user name>/assets/img/avatar.jpg"
-baseurl: "/<your github user name>"
-The importance of <your github username> will be clear once we get to the Urls...
 
-> My avatar and favicons are generated from a cell phone picture I took on Sunday July 11,2021 at 05:08 AM...
+baseurl: "/<your github user name>"
+
+The importance of <your github username> will be clear once we get to the Urls section...
+
+> My avatar and favicons are generated from a picture I took with my mobile phone on Sunday July 11,2021 at 05:08 AM...I Still think it was a beautiful sunrise!
 > {: .prompt-tip }
 
-○ Urls
+#### Urls
+
 url: "https://<your github username>.github.io"
 
-> When deployed to github pages, the url will be in the form {{ site.url }}/{{ site.baseurl }} thus if your github username is uzrg, then url of your site is [https://uzrg.github.io/uzrg](https://uzrg.github.io/uzrg/), this is the url that will be used to locate your images under assets/img
+> When deployed to github pages, the url will be in the form {{ site.url }}/{{ site.baseurl }} thus as example, if your github username is uzrg, then the url of your site is [https://uzrg.github.io/uzrg](https://uzrg.github.io/uzrg/), this is the url that will be used to locate and serve your images placed under assets/img
 > {: .prompt-tip }
-> In addition to avatar, urls there are other customizations that you will need to change including links to different social medias such as twitter (now x), facebook, github, linkedin, etc ...
-> ○ authors,contact, share
+> In addition to avatar and urls, other customizations that need to be changed include links to different social medias platforms such as twitter (now x), facebook, github, linkedin, etc ...
+
+#### authors,contact, share
+
 > Navigate to \_data\origin to update the
 > authors.yml
 > contact.yml
@@ -250,5 +257,77 @@ url: "https://<your github username>.github.io"
 > {: .prompt-tip }
 > The yaml files are self explanatory, take a look and customize to your liking ...
 
-○ Posts
-Follow the [Writing a New Post](https://chirpy.cotes.page/posts/write-a-new-post/) to create new posts
+#### Posts
+
+Follow the <a href="https://chirpy.cotes.page/posts/write-a-new-post/" target="_blank">Writing a New Post</a> to create new posts.
+
+### Build and test site locally
+
+Now that the site is customized and some posts have been created, it’s time to run it locally to see how it looks. Assuming the PowerShell profile mentioned earlier was set up and ran as expected, all the infrastructure needed to run the site should be installed under $devOpsPath\Tools and the $env:path should be updated. If you are in VSCode, open the terminal or open a regular PowerShell terminal and navigate to $devOpsPath\<your github user> directory, then run the necessary commands.
+
+Remember to replace <your github user> with your actual GitHub username
+
+```
+bundle install
+
+```
+
+Then
+
+```
+bundle exec jekyll serve
+
+```
+
+Executing the "bundle exec jekyll serve" command will generate and deploy the site on local machine on tcp port 4000. Thus the local site can be accessed by browsing to http://127.0.0.1:4000/<baseurl>/
+the <baseurl> will be the value configured earlier in \_config.yml. If baseurl is empty in _config.yml then there is no baseurl in the local host url. For example, when i run \*\*\_bundle exec jekyll serve_\*\* the local site is http://127.0.0.1:4000/uzrg/ as my baseurl is "/uzrg". Please note that baserul always start with a / !
+
+### Push to GitHub, GitHub Pages URL, Build and Deploy Actions
+
+Assuming the local site looks ready for prime time, it can be pushed to github and deployed to be accessible via the github.io address.
+
+- Did you add your github origin?
+
+```
+git remote add origin https://github.com/<your github user>/<your git hub project>.git
+
+
+```
+
+- Check status
+
+```
+git status
+```
+
+- Stage Changes
+
+```
+git add *
+```
+
+- Commit Changes
+
+```
+git commit -m "what did you change before this iteration"
+```
+
+- Before pushing to github, add linux support
+
+```
+bundle lock --add-platform x86_64-linux
+```
+
+```
+git commit -m "another commit for linux support"
+```
+
+- Push to remote repository
+
+```
+git push -u origin master
+```
+
+For details on git commands refer to the <a href="https://git-scm.com/book/en/v2" target="_blank">Pro Git Book</a>
+
+- Set Github Pages URL, Deploment Branch and Build and Deployment Actions
