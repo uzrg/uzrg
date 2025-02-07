@@ -42,172 +42,273 @@ I recommend using the following PowerShell script by turning it into a PowerShel
 
 ```PowerShell
 <#
-    AllUsersAllHosts       : C:\Windows\System32\WindowsPowerShell\v1.0\profile.ps1
-    CurrentUserAllHosts    : ~\Documents\WindowsPowerShell\profile.ps1
+    DevOps Environment Setup Script
+    Version: 2.1
+    Developer: uzrg
+    Website: https://github.com/uzrg
+    Email: <nospamemail@domain.tld>
+
+    Features:
+    - Configurable tool source (network share/web)
+    - Git cheat sheet on demand
+    - Automated tool installation
+    - Repository cloning
+    - Persistent configuration
+
+    Profile Paths:
+    - AllUsersAllHosts:   $PROFILE.AllUsersAllHosts
+    - CurrentUserAllHosts: $PROFILE.CurrentUserAllHosts
 #>
 
-$Host.UI.RawUI.WindowTitle += " : " + $env:USERDOMAIN + "\" + $env:USERNAME + "@" + $env:COMPUTERNAME
-# Define DevOps path
-$devOpsPath = "C:\DevOps"
+# Set Window Title with User and System Information
+$Host.UI.RawUI.WindowTitle = "PowerShell - {0}\{1}@{2}" -f $env:USERDOMAIN, $env:USERNAME, $env:COMPUTERNAME
 
-# Set the Name and Email variables for your github account
-#these will be needed later to configure git
-$userName = "yourgithubusername"
-$userEmail = "youremailaddress@domain.tld"
+# DevOps Environment Configuration
+$devOpsPath = "R:\DevOps"
+$configFile = Join-Path $devOpsPath "devops_config.json"
+$requiredTools = @('Git', 'VSCode', 'Ruby', 'Terraform')
 
-$githubUser = [PSCustomObject]@{
-    Name  = $userName
-    Email = $userEmail
+# Create DevOps Directory Structure
+if (-not (Test-Path -Path $devOpsPath)) {
+    New-Item -ItemType Directory -Path $devOpsPath -Force | Out-Null
 }
 
-# Check if $devOpsPath exists and create it if it doesn't
-if (!(Test-Path -Path $devOpsPath)) {
-    New-Item -ItemType Directory -Force -Path $devOpsPath
-}
-
-# Define paths, URLs, outputs, extraction paths, and currentUser
-$paths = @{
-    "git"       = "$devOpsPath\Tools\PortableGit\bin"
-    "vsCode"    = "$devOpsPath\Tools\VSCode\"
-    "ruby"      = "$devOpsPath\Tools\Ruby\bin"
-}
-
-$urls = @{
-    "vscode" = "https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
-    "git"    = "https://github.com/git-for-windows/git/releases/download/v2.33.0.windows.2/PortableGit-2.33.0.2-64-bit.7z.exe"
-    "ruby"   = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.2.0-1/rubyinstaller-devkit-3.2.0-1-x64.exe"
-}
-
-$outputs = @{
-    "vscode" = "$devOpsPath\Tools\vscode-portable.zip"
-    "git"    = "$devOpsPath\Tools\PortableGit-2.33.0.2-64-bit.7z.exe"
-    "ruby"   = "$devOpsPath\Tools\rubyinstaller-devkit-3.2.0-1-x64.exe"
-}
-
-$extractPaths = @{
-    "vscode" = "$devOpsPath\Tools\VSCode"
-    "git"    = "$devOpsPath\Tools\PortableGit"
-    "ruby"   = "$devOpsPath\Tools\Ruby"
-}
-
-# Advanced Function to download and extract files
-function downloadAndExtract {
-    [CmdletBinding()]
+# Configuration Management
+function Get-ToolSourcePreference {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$url,
-        [Parameter(Mandatory=$true)]
-        [string]$output,
-        [Parameter(Mandatory=$true)]
-        [string]$extractPath
+        [string]$ConfigPath
     )
+
+    if (Test-Path $ConfigPath) {
+        try {
+            $config = Get-Content $ConfigPath | ConvertFrom-Json
+            return [bool]$config.UseNetworkShare
+        }
+        catch {
+            Write-Warning "Invalid config file. Using default settings."
+        }
+    }
+
+    $choice = $host.UI.PromptForChoice(
+        'Tool Source Selection',
+        'Where should tools be downloaded from?',
+        @('&Network Share', '&Internet'),
+        0
+    )
+
+    $config = @{
+        UseNetworkShare = ($choice -eq 0)
+        LastConfigured  = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    }
+
+    $config | ConvertTo-Json | Out-File $ConfigPath -Force
+    return $config.UseNetworkShare
+}
+
+# Get user preference
+$useNetworkShare = Get-ToolSourcePreference -ConfigPath $configFile
+
+# Tool Configuration
+$toolConfig = @{
+    Git = @{
+        Path        = Join-Path $devOpsPath "Tools\PortableGit"
+        Url         = "https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/PortableGit-2.43.0-64-bit.7z.exe"
+        Output      = Join-Path $devOpsPath "Tools\PortableGit.7z.exe"
+        Executable  = "bin\git.exe"
+    }
+    VSCode = @{
+        Path        = Join-Path $devOpsPath "Tools\VSCode"
+        Url         = "https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
+        Output      = Join-Path $devOpsPath "Tools\vscode.zip"
+        Executable  = "Code.exe"
+    }
+    Ruby = @{
+        Path        = Join-Path $devOpsPath "Tools\Ruby"
+        Url         = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.2.2-1/rubyinstaller-devkit-3.2.2-1-x64.exe"
+        Output      = Join-Path $devOpsPath "Tools\rubyinstaller.exe"
+        Executable  = "bin\ruby.exe"
+    }
+    Terraform = @{
+        Path        = Join-Path $devOpsPath "Tools\Terraform"
+        Url         = "https://releases.hashicorp.com/terraform/1.9.6/terraform_1.9.6_windows_amd64.zip"
+        Output      = Join-Path $devOpsPath "Tools\terraform.zip"
+        Executable  = "terraform.exe"
+    }
+}
+
+# Git Configuration
+$gitUserConfig = @{
+    Name  = "yourgithubusername"
+    Email = "youremailaddress@domain.tld"
+}
+
+# Tool Installation Function
+function Install-Tool {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ToolName,
+        [Parameter(Mandatory)]
+        [hashtable]$Config
+    )
+
     try {
-        $response = Invoke-WebRequest -Uri $url -Method Head
-        if ($response.StatusCode -eq 200) {
-            Invoke-WebRequest -Uri $url -OutFile $output
-            Write-Output "Download successful."
+        Write-Verbose "Checking $ToolName installation" -Verbose
+        $exePath = Join-Path $Config.Path $Config.Executable
 
-            # Create the extraction directory if it doesn't exist
-            if (!(Test-Path -Path $extractPath)) {
-                New-Item -ItemType Directory -Force -Path $extractPath
-            }
-
-            if ($output -like "*.zip") {
-                # Extract the zip file
-                Expand-Archive -Path $output -DestinationPath $extractPath -Force
-                Write-Output "Extraction successful."
-            } elseif($output -like "*7z.exe") {
-                Set-Location $extractPath
-                cd ..
-                $output = (ls .\PortableGit-2.33.0.2-64-bit.7z.exe).FullName
-                Start-Process $output -ArgumentList "x `"$output`" -o`"$extractPath`" -y" -NoNewWindow -Wait
-            } elseif($output -like "*.exe") {
-                # Run the installer
-                Start-Process -FilePath $output -ArgumentList "/verysilent /dir=`"$extractPath`"" -Wait
-                Write-Output "Installation successful."
-            }
-        } else {
-            Write-Output "The URL is not responsive. Please check the URL."
+        if (Test-Path $exePath) {
+            Write-Verbose "$ToolName already installed at $exePath" -Verbose
+            return
         }
-    } catch {
-        Write-Output "An error occurred: $_"
-    }
-}
 
-# Check if extraction paths exist and create them if they don't
-$extractPaths.Values | ForEach-Object {
-    if (!(Test-Path -Path $_)) {
-        New-Item -ItemType Directory -Force -Path $_
-    }
-}
+        Write-Verbose "Installing $ToolName..." -Verbose
 
-# Check if Git, VSCode, and Ruby paths exist
-if ((Test-Path $paths.git) -and (Test-Path $paths.vsCode) -and (Test-Path $paths.ruby)) {
-    # Add git.exe, Code.exe, and ruby.exe to the path
-    $env:Path += ";$paths.git"
-    $env:Path += ";$paths.vsCode"
-    $env:Path += ";$paths.ruby"
+        # Create tool directory
+        if (-not (Test-Path $Config.Path)) {
+            New-Item -Path $Config.Path -ItemType Directory -Force | Out-Null
+        }
 
-    # Git, VSCode, and Ruby installed at the expected location then clone a remote project
-    Set-Location $devOpsPath
-    if (!(Test-Path -Path $githubUser.Name)) {
-        New-Item -Name $githubUser.Name -Path . -ItemType Directory -Verbose
-        git clone https://github.com/cotes2020/jekyll-theme-chirpy.git $githubUser.Name
-         #git clone --recursive --verbose  https://github.com/cotes2020/jekyll-theme-chirpy.git uzrg
-    } else {
-        Write-Output "The directory $($githubUser.Name) already exists. Skipping the cloning operation."
-    }
-
-} else {
-    # Download and extract VSCode, Git portable versions, and Ruby installer
-    downloadAndExtract -url $urls.vscode -output $outputs.vscode -extractPath $extractPaths.vscode
-    downloadAndExtract -url $urls.git -output $outputs.git -extractPath $extractPaths.git
-    downloadAndExtract -url $urls.ruby -output $outputs.ruby -extractPath $extractPaths.ruby
-
-    # Add Git, VSCode, and Ruby to path
-    $env:Path += ";$paths.git"
-    $env:Path += ";$paths.vsCode"
-    $env:Path += ";$paths.ruby"
-
-    # Git setup with git config
-    # Git, VSCode, and Ruby downloaded and installed at the expected location then clone a remote project
-    Set-Location $devOpsPath
-    if (!(Test-Path -Path $githubUser.Name)) {
-        New-Item -Name $githubUser.Name -Path . -ItemType Directory -Verbose
-        git clone https://github.com/cotes2020/jekyll-theme-chirpy.git $githubUser.Name
-        #git clone --recursive --verbose  https://github.com/cotes2020/jekyll-theme-chirpy.git uzrg
-
-    } else {
-        Write-Output "The directory $($githubUser.Name) already exists. Skipping the cloning operation."
-    }
-
-}
-
-# Install Jekyll and Bundler
-if (Test-Path $paths.ruby) {
-
-cd $paths.ruby
-    .\gem install jekyll bundler
-} else {
-    Write-Output "Ruby is not installed or not added to the PATH. Skipping the installation of Jekyll and Bundler."
-}
-
-# Find directories with .git or .github
-$directoriesWithGit = @(
-    Get-ChildItem -Path $devOpsPath -Directory | ForEach-Object {
-        if ((Get-ChildItem -Path $_.FullName -Recurse -Include @('.git', '.github') -Directory -ErrorAction SilentlyContinue)) {
-            if ($_.Name -ne 'Tools') {
-                $_.FullName
+        # Network share logic
+        if ($useNetworkShare) {
+            $networkSharePath = Join-Path "\\dept-files\tools\DevOps\" (Split-Path $Config.Output -Leaf)
+            if (Test-Path $networkSharePath) {
+                Write-Verbose "Copying $ToolName from network share..." -Verbose
+                Copy-Item -Path $networkSharePath -Destination $Config.Output -Force
+            }
+            else {
+                Write-Warning "Network share copy failed for $ToolName - falling back to web download"
             }
         }
-    }
-)
 
-Write-Output "Found potential git<hub> repos:`n`n"
-foreach ($dir in $directoriesWithGit) {
-    Write-Output "$dir`n"
+        # Web download fallback
+        if (-not (Test-Path $Config.Output)) {
+            Write-Verbose "Downloading $ToolName from web..." -Verbose
+            Invoke-WebRequest -Uri $Config.Url -OutFile $Config.Output -UseBasicParsing
+        }
+
+        # Extract/Install tool
+        switch -Wildcard ($Config.Output) {
+            "*.zip" {
+                Expand-Archive -Path $Config.Output -DestinationPath $Config.Path -Force
+            }
+            "*.7z.exe" {
+                Start-Process -FilePath $Config.Output -ArgumentList "-o$($Config.Path) -y" -Wait -NoNewWindow
+            }
+            "*.exe" {
+                Start-Process -FilePath $Config.Output -ArgumentList "/verysilent /dir=`"$($Config.Path)`"" -Wait
+            }
+        }
+
+        # Verify installation
+        if (Test-Path $exePath) {
+            Write-Verbose "$ToolName installed successfully" -Verbose
+            $env:Path += ";$($Config.Path)"
+        }
+        else {
+            Write-Warning "$ToolName installation may have failed - executable not found"
+        }
+    }
+    catch {
+        Write-Warning "Failed to install $ToolName : $_"
+    }
 }
-Write-Output "`nNavigate into the repo or  ''code  $devOpsPath\$($githubUser.Name)''  to open the project in vscode`n"
+
+# Install/Update Tools
+foreach ($tool in $requiredTools) {
+    $config = $toolConfig[$tool]
+    Install-Tool -ToolName $tool -Config $config
+}
+
+# Configure Git
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    git config --global user.name $gitUserConfig.Name
+    git config --global user.email $gitUserConfig.Email
+}
+else {
+    Write-Warning "Git not available for configuration"
+}
+
+# Clone Repositories
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    $repos = @(
+        @{ Name = '<gitusername>'; Url = 'https://github.com/'<gitusername>'/'<gitusername>'.git' },
+        @{ Name = 'jekyll-theme-chirpy'; Url = 'https://github.com/cotes2020/jekyll-theme-chirpy.git' }
+    )
+
+    foreach ($repo in $repos) {
+        $repoPath = Join-Path $devOpsPath $repo.Name
+        if (-not (Test-Path $repoPath)) {
+            Set-Location $devOpsPath
+            git clone $repo.Url
+        }
+        else {
+            Write-Verbose "Repository $($repo.Name) already exists" -Verbose
+        }
+    }
+}
+
+# Install Ruby Gems
+if (Get-Command ruby -ErrorAction SilentlyContinue) {
+    gem install jekyll bundler --no-document --quiet
+}
+else {
+    Write-Warning "Ruby not available for gem installation"
+}
+
+# Git Cheat Sheet Function
+function Show-GitCheatSheet {
+    $cheatSheet = @"
+=================================================================
+Git Essentials Cheat Sheet
+=================================================================
+Basic Workflow:
+    git init                        Initialize new repository
+    git clone <url>                 Clone a repository
+    git add <file>                  Stage changes
+    git commit -m "message"         Commit staged changes
+    git push                        Push to remote repository
+    git pull                        Update from remote
+
+Branching:
+    git branch                      List branches
+    git branch <name>               Create new branch
+    git checkout <branch>           Switch branches
+    git merge <branch>              Merge branches
+    git rebase <branch>             Rebase current branch
+
+Undoing Changes:
+    git reset --hard HEAD           Discard all local changes
+    git revert <commit>             Create undo commit
+    git clean -df                   Remove untracked files
+
+Configuration:
+    git config --global user.name "Your Name"
+    git config --global user.email "your@email.com"
+
+Useful Tips:
+    git log --oneline --graph       Compact commit history
+    git status -sb                  Short status format
+    git diff --cached               View staged changes
+
+Additional Resources:
+- Official Git Book: https://git-scm.com/book/en/v2
+- Visualizing Git: https://git-school.github.io/visualizing-git/
+- Git Documentation: https://git-scm.com/doc
+"@
+    Write-Host $cheatSheet -ForegroundColor Cyan
+}
+
+# Final Setup Completion
+Set-Location $devOpsPath
+Write-Host "`nDevOps environment setup completed successfully!" -ForegroundColor Green
+Write-Host "`nConfiguration Summary:"
+Write-Host "- Tool Source: $(if ($useNetworkShare) { 'Network Share (\\dept-files\tools\DevOps\)' } else { 'Internet' })" -ForegroundColor Yellow
+Write-Host "- Installation Directory: $devOpsPath" -ForegroundColor Yellow
+Write-Host "`nAvailable Commands:"
+Write-Host "- Show-GitCheatSheet : Display Git reference guide" -ForegroundColor Cyan
+Write-Host "- Get-ChildItem       : Explore installed tools" -ForegroundColor Cyan
+Write-Host "`nTo reconfigure tool sources, delete config file and rerun this script:"
+Write-Host "Remove-Item $configFile" -ForegroundColor Yellow
 
 ```
 
