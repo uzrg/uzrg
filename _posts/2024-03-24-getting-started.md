@@ -64,7 +64,7 @@ I recommend using the following PowerShell script by turning it into a PowerShel
 $Host.UI.RawUI.WindowTitle = "PowerShell - {0}\{1}@{2}" -f $env:USERDOMAIN, $env:USERNAME, $env:COMPUTERNAME
 
 # DevOps Environment Configuration
-$devOpsPath = "R:\DevOps"
+$devOpsPath = "C:\DevOps"
 $configFile = Join-Path $devOpsPath "devops_config.json"
 $requiredTools = @('Git', 'VSCode', 'Ruby', 'Terraform')
 
