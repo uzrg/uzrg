@@ -37,8 +37,9 @@ jobs:
         uses: ruby/setup-ruby@8575951200e472d5f2d95c625da0c7bec8217c42 # v1.161.0
         with:
           ruby-version: "3.1" # Not needed with a .ruby-version file
-      - name: Install dependencies
-        run: bundle Install
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+          cache-version: 1 # Increment this number if you need to re-download cached gemsname: Install dependencies
+
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4
