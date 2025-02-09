@@ -45,6 +45,8 @@ jobs:
           echo 'export PATH="/opt/hostedtoolcache/Ruby/3.1.4/x64/bin:$PATH"' >> $GITHUB_ENV
           echo 'export GEM_HOME="/opt/hostedtoolcache/Ruby/3.1.4/x64/lib/ruby/gems/3.1.0"' >> $GITHUB_ENV
           echo 'export BUNDLE_PATH="/opt/hostedtoolcache/Ruby/3.1.4/x64/lib/ruby/gems/3.1.0"' >> $GITHUB_ENV
+          gem install bundler
+          bundle install
 
       - name: Setup Pages
         id: pages
