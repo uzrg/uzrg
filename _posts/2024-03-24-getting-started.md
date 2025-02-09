@@ -298,7 +298,7 @@ Additional Resources:
     Write-Host $cheatSheet -ForegroundColor Cyan
 }
 
-# Final Setup Completion
+# Final Setup Complete
 Set-Location $devOpsPath
 Write-Host "`nDevOps environment setup completed successfully!" -ForegroundColor Green
 Write-Host "`nConfiguration Summary:"
