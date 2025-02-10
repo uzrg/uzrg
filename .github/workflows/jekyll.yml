@@ -37,10 +37,11 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "latest" # Use the latest Ruby version
+          ruby-version: "3.1" # Use Ruby version 3.1
 
       - name: Install dependencies
         run: |
+          gem install bundler
           bundle install
 
       - name: Setup Pages
