@@ -2,26 +2,37 @@
 
 source "https://rubygems.org"
 
-gemspec
+# Remove gemspec unless you have a specific .gemspec file for your theme
+# (Most Chirpy users don't need this)
+# gemspec
 
-gem "jekyll", "~> 4.2.0"
-#gem "github-pages", group: :jekyll_plugins
-gem "jekyll-theme-chirpy"
+gem "jekyll", "~> 4.3.0"  # Updated to match Chirpy's requirements
+
+# Remove github-pages gem - it conflicts with custom themes
+# group :jekyll_plugins do
+#   gem "github-pages"
+# end
+
+# Specify Chirpy theme directly from GitHub
+gem "jekyll-theme-chirpy", git: "https://github.com/cotes2020/jekyll-theme-chirpy.git"
+
+# Add required plugins explicitly
+group :jekyll_plugins do
+  gem "jekyll-feed"
+  gem "jekyll-seo-tag"
+  gem "jekyll-archives"
+  gem "jekyll-sitemap"
+end
 
 group :test do
   gem "html-proofer", "~> 4.4"
 end
 
-# Windows and JRuby does not include zoneinfo files, so bundle the tzinfo-data gem
-# and associated library.
 platforms :mingw, :x64_mingw, :mswin, :jruby do
   gem "tzinfo", ">= 1", "< 3"
   gem "tzinfo-data"
 end
 
-# Performance-booster for watching directories on Windows
-gem "wdm", "~> 0.1.1", :platforms => [:mingw, :x64_mingw, :mswin]
+gem "wdm", "~> 0.1.1", platforms: [:mingw, :x64_mingw, :mswin]
 
-# Lock `http_parser.rb` gem to `v0.6.x` on JRuby builds since newer versions of the gem
-# do not have a Java counterpart.
-gem "http_parser.rb", "~> 0.6.0", :platforms => [:jruby]
+gem "http_parser.rb", "~> 0.6.0", platforms: [:jruby]
