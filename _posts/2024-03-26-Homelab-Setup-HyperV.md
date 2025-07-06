@@ -15,12 +15,13 @@ categories:
   ]
 tags: [Microsoft, HyperV, Windows, Windows Server, Ubuntu]
 pin: true
+mermaid: true
 img_path: /posts/20230326
 ---
 
 # Hyper-V Lab Infrastructure Documentation
 ## Overview
-This documentation describes the comprehensive Hyper-V lab environment running on SUPERLAB, a Supermicro server hosting a complete Microsoft enterprise infrastructure stack.
+This page documente my Hyper-V homelab environment running on a Supermicro server hosting a complete Microsoft enterprise infrastructure stack.
 
 ## Physical Infrastructure
 **SUPERLAB Host Server:**
@@ -248,8 +249,8 @@ SQL Server Always On Availability Group provides database services to:
 The infrastructure includes comprehensive management through:
 - **System Center Operations Manager:** Infrastructure monitoring
 - **System Center Configuration Manager:** System deployment and updates
-- **Windows Server Update Services:** Centralized patching
-- **Azure DevOps Server:** Development lifecycle management
+- **Windows Server Update Services:** Serves as a Software Update Point - SUP
+- **Azure DevOps Server:** Development lifecycle management- git repos, devops boards, etc...
 
 ## Notes
-The environment demonstrates enterprise-grade Microsoft technologies with proper redundancy and high availability configurations.
+The hyper-v homelab emulate a basic enterprise-grade Microsoft infrastructure service redundancy and high availability configurations.
