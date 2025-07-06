@@ -34,12 +34,132 @@ This documentation describes the comprehensive Hyper-V lab environment running o
 ### Detailed System Architecture
 The detailed architecture shows all virtual machines, their roles, and interconnections:
 
-{% include_relative diagrams/hyperv-detailed-architecture.dot %}
+```mermaid
+graph TB
+    subgraph "Physical Host - SUPERLAB"
+        subgraph "Network Infrastructure"
+            OPS[OpSense Firewall<br/>2048 MB]
+            VMM[VMM01 Server<br/>1102 MB]
+            WSUS[WSUS01 Update Server<br/>1148 MB]
+        end
+
+        subgraph "Active Directory"
+            DC01[DC01 Primary DC<br/>1504 MB]
+            DC02[DC02 Secondary DC<br/>1326 MB]
+        end
+
+        subgraph "SQL Always On Cluster"
+            SQL01[SQL01 Node 1<br/>2530 MB]
+            SQL02[SQL02 Node 2<br/>2564 MB]
+            SQL03[SQL03 Node 3<br/>2548 MB]
+            SQLAGL[SQLAGL01 AG Listener<br/>1148 MB]
+            SQLCLU[SQLCLU01 Cluster<br/>1104 MB]
+        end
+
+        subgraph "Remote Desktop Services"
+            RDSCB[RDSCB Connection Broker<br/>1412 MB]
+            RDSGW[RDSGW Gateway<br/>1094 MB]
+            RDSLC[RDSLC License Server<br/>1064 MB]
+            RDSSH01[RDSSH01 Session Host<br/>1086 MB]
+            RDSSH02[RDSSH02 Session Host<br/>1048 MB]
+            RDSWEB[RDSWEB Web Access<br/>1058 MB]
+        end
+
+        subgraph "System Center"
+            MECM01[MECM01 Primary Site<br/>2004 MB]
+            MECM02[MECM02 Secondary Site<br/>1126 MB]
+            OPSMGR01[OPSMGR01 Mgmt Server<br/>2498 MB]
+            OPSMGR02[OPSMGR02 Mgmt Server<br/>1302 MB]
+        end
+
+        subgraph "DevOps & File Services"
+            DEVOPS[DEVOPS01 Azure DevOps<br/>8152 MB]
+            FS01[FS01 File Server<br/>1108 MB]
+        end
+
+        subgraph "Linux Systems (Offline)"
+            UBUNTU[Ubuntu Server<br/>Status: Off]
+            CENTOS[CENTOS01<br/>Status: Off]
+        end
+    end
+
+    DC01 -.-> DC02
+    SQL01 -.-> SQL02
+    SQL02 -.-> SQL03
+    SQL01 -.-> SQLAGL
+    SQL02 -.-> SQLAGL
+    SQL03 -.-> SQLAGL
+    SQLAGL --> DEVOPS
+    SQLAGL --> MECM01
+    SQLAGL --> OPSMGR01
+    SQLAGL --> RDSCB
+    SQLAGL --> WSUS
+
+    RDSCB --> RDSSH01
+    RDSCB --> RDSSH02
+    RDSCB --> RDSWEB
+    RDSCB --> RDSGW
+    RDSCB --> RDSLC
+
+    MECM01 --> MECM02
+    OPSMGR01 --> OPSMGR02
+```
 
 ### Network Overview
 The network overview diagram illustrates the network topology and service dependencies:
 
-{% include_relative diagrams/hyperv-network-overview.dot %}
+```mermaid
+graph LR
+    subgraph "External Network"
+        WAN[WAN Interface]
+    end
+
+    subgraph "SUPERLAB Physical Host"
+        EXT_SW[External Virtual Switch]
+        INT_SW[Internal Virtual Switch]
+
+        subgraph "DMZ Services"
+            OPS_FW[OpSense Firewall]
+            RDSGW_DMZ[RDS Gateway]
+        end
+
+        subgraph "Internal Network"
+            subgraph "Core Services"
+                DC_SERVICES[Domain Controllers<br/>DC01 & DC02]
+                SQL_CLUSTER[SQL Always On<br/>3-Node Cluster]
+                WSUS_SRV[WSUS Server]
+            end
+
+            subgraph "Application Services"
+                RDS_FARM[RDS Farm<br/>6 Servers]
+                SCCM_INFRA[System Center<br/>MECM & OPSMGR]
+                DEVOPS_SRV[Azure DevOps Server]
+                FILE_SRV[File Server]
+            end
+        end
+    end
+
+    WAN --> EXT_SW
+    EXT_SW --> OPS_FW
+    EXT_SW --> RDSGW_DMZ
+    OPS_FW --> INT_SW
+    INT_SW --> DC_SERVICES
+    INT_SW --> SQL_CLUSTER
+    INT_SW --> WSUS_SRV
+    INT_SW --> RDS_FARM
+    INT_SW --> SCCM_INFRA
+    INT_SW --> DEVOPS_SRV
+    INT_SW --> FILE_SRV
+
+    SQL_CLUSTER -.-> DEVOPS_SRV
+    SQL_CLUSTER -.-> SCCM_INFRA
+    SQL_CLUSTER -.-> RDS_FARM
+    SQL_CLUSTER -.-> WSUS_SRV
+    DC_SERVICES -.-> SQL_CLUSTER
+    DC_SERVICES -.-> RDS_FARM
+    DC_SERVICES -.-> SCCM_INFRA
+    DC_SERVICES -.-> DEVOPS_SRV
+```
 
 ## Infrastructure Components
 ### Network & Security Infrastructure
