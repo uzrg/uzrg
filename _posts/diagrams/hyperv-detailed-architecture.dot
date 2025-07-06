@@ -1,0 +1,186 @@
+digraph HyperVLabDetailed {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=filled];
+    edge [dir=none];
+
+    // Physical Host Layer
+    subgraph cluster_host {
+        label="Physical Infrastructure";
+        style=filled;
+        fillcolor=lightgray;
+
+        Host [label="SUPERLAB\nSupermicro Super Server\nWindows Server 2022 Datacenter\nAMD EPYC 3251 8-Core | 255.89 GB RAM\n8005.8 GB Storage", fillcolor=lightblue, height=1.5, width=3];
+    }
+
+    // Network Infrastructure Layer
+    subgraph cluster_network_infra {
+        label="Network & Security Infrastructure";
+        style=filled;
+        fillcolor=lightcyan;
+        rank=same;
+
+        OpSense [label="OpSense\nFirewall/Router\n2048 MB\nUptime: 09:10:12", fillcolor=lightcyan, width=1.5];
+        VMM01 [label="VMM01\nVMM Server\n1102 MB\nUptime: 09:10:15", fillcolor=lightcyan, width=1.5];
+        WSUS01 [label="WSUS01\nUpdate Server\n1148 MB\nUptime: 09:10:16", fillcolor=lightcyan, width=1.5];
+    }
+
+    // Domain Services Layer
+    subgraph cluster_domain {
+        label="Active Directory Domain Services";
+        style=filled;
+        fillcolor=lightblue;
+        rank=same;
+
+        DC01 [label="DC01\nPrimary Domain Controller\nmyhomelab.hv.lab\n1504 MB | 09:10:16", fillcolor=lightblue, width=2];
+        DC02 [label="DC02\nSecondary Domain Controller\nmyhomelab.hv.lab\n1326 MB | 09:10:11", fillcolor=lightblue, width=2];
+    }
+
+    // SQL Server Cluster Layer
+    subgraph cluster_sql {
+        label="SQL Server Always On Availability Group";
+        style=filled;
+        fillcolor=lightgreen;
+        rank=same;
+
+        SQL01 [label="SQL01\nSQL Server Node 1\n2530 MB | 09:10:20", fillcolor=lightgreen, width=1.8];
+        SQL02 [label="SQL02\nSQL Server Node 2\n2564 MB | 09:10:19", fillcolor=lightgreen, width=1.8];
+        SQL03 [label="SQL03\nSQL Server Node 3\n2548 MB | 09:10:18", fillcolor=lightgreen, width=1.8];
+    }
+
+    // SQL Support Services
+    subgraph cluster_sql_support {
+        label="SQL Cluster Support Services";
+        style=filled;
+        fillcolor=palegreen;
+        rank=same;
+
+        SQLAGL01 [label="SQLAGL01\nAG Listener\n1148 MB | 09:10:16", fillcolor=palegreen, width=1.5];
+        SQLCLU01 [label="SQLCLU01\nFailover Cluster\n1104 MB | 09:10:15", fillcolor=palegreen, width=1.5];
+        CAUSQLCL4bu [label="CAUSQLCL4bu\nCluster Virtual Network\nFailover Support", fillcolor=palegreen, width=1.5];
+    }
+
+    // Database Layer
+    subgraph cluster_databases {
+        label="SQL Server Databases";
+        style=filled;
+        fillcolor=lightsteelblue;
+        rank=same;
+
+        DB_Group1 [label="AzureDevOps_Configuration\nAzureDevOps_myhomelab\nCM_MHL", fillcolor=lightsteelblue, width=2];
+        DB_Group2 [label="OperationsManager\nOperationsManagerDW\nRDSCB_DB", fillcolor=lightsteelblue, width=2];
+        DB_Group3 [label="SUSDB\n(Windows Update Services)", fillcolor=lightsteelblue, width=2];
+    }
+
+    // Remote Desktop Services Layer
+    subgraph cluster_rds {
+        label="Remote Desktop Services Farm";
+        style=filled;
+        fillcolor=yellow;
+        rank=same;
+
+        RDSCB [label="RDSCB\nConnection Broker\n1412 MB | 09:10:18", fillcolor=yellow, width=1.5];
+        RDSGW [label="RDSGW\nRDS Gateway\n1094 MB | 09:10:12", fillcolor=yellow, width=1.5];
+        RDSLC [label="RDSLC\nLicense Server\n1064 MB | 09:10:14", fillcolor=yellow, width=1.5];
+    }
+
+    // RDS Session Hosts
+    subgraph cluster_rds_hosts {
+        label="RDS Session Hosts";
+        style=filled;
+        fillcolor=lightyellow;
+        rank=same;
+
+        RDSSH01 [label="RDSSH01\nSession Host 1\n1086 MB | 09:10:13", fillcolor=lightyellow, width=1.5];
+        RDSSH02 [label="RDSSH02\nSession Host 2\n1048 MB | 09:10:17", fillcolor=lightyellow, width=1.5];
+        RDSWEB [label="RDSWEB\nWeb Access\n1058 MB | 09:10:12", fillcolor=lightyellow, width=1.5];
+    }
+
+    // System Center Management Layer
+    subgraph cluster_sccm {
+        label="System Center Configuration Manager";
+        style=filled;
+        fillcolor=orange;
+        rank=same;
+
+        MECM01 [label="MECM01\nMECM Primary Site\n2004 MB | 09:10:15", fillcolor=orange, width=1.8];
+        MECM02 [label="MECM02\nMECM Secondary Site\n1126 MB | 09:10:13", fillcolor=orange, width=1.8];
+    }
+
+    // System Center Operations Manager Layer
+    subgraph cluster_opsmgr {
+        label="System Center Operations Manager";
+        style=filled;
+        fillcolor=darkorange;
+        rank=same;
+
+        OPSMGR01 [label="OPSMGR01\nManagement Server 1\n2498 MB | 09:10:19", fillcolor=darkorange, width=1.8];
+        OPSMGR02 [label="OPSMGR02\nManagement Server 2\n1302 MB | 09:10:19", fillcolor=darkorange, width=1.8];
+    }
+
+    // DevOps & File Services Layer
+    subgraph cluster_devops {
+        label="DevOps & File Services";
+        style=filled;
+        fillcolor=pink;
+        rank=same;
+
+        DEVOPS01 [label="DEVOPS01\nAzure DevOps Server\n8152 MB | 09:10:10", fillcolor=pink, width=2];
+        FS01 [label="FS01\nFile Server\n1108 MB | 09:10:10", fillcolor=pink, width=2];
+    }
+
+    // Offline Systems Layer
+    subgraph cluster_offline {
+        label="Offline Systems";
+        style=filled;
+        fillcolor=lightgray;
+        rank=same;
+
+        UBUNTU [label="UBUNTU\nUbuntu Server\nStatus: Off", fillcolor=lightgray, width=1.5];
+        CENTOS01 [label="CENTOS01\nCentOS Server\nStatus: Off", fillcolor=lightgray, width=1.5];
+    }
+
+    // Physical to Virtual connections
+    Host -> OpSense;
+    Host -> DC01;
+    Host -> DC02;
+    Host -> SQL01;
+
+    // Network infrastructure connections
+    OpSense -> DC01 [style=dashed];
+    OpSense -> DC02 [style=dashed];
+
+    // Domain controller replication
+    DC01 -> DC02 [style=dashed, label="AD Replication"];
+
+    // SQL Always On connections
+    SQL01 -> SQL02 [style=dashed, label="Always On AG"];
+    SQL02 -> SQL03 [style=dashed, label="Always On AG"];
+    SQL03 -> SQL01 [style=dashed, label="Always On AG"];
+
+    // SQL support services
+    SQL01 -> SQLAGL01 [style=dotted];
+    SQL01 -> SQLCLU01 [style=dotted];
+    SQL01 -> CAUSQLCL4bu [style=dotted];
+
+    // Database connections
+    SQL01 -> DB_Group1;
+    SQL01 -> DB_Group2;
+    SQL01 -> DB_Group3;
+
+    // Service to database dependencies
+    DEVOPS01 -> DB_Group1 [style=dashed, label="Uses"];
+    MECM01 -> DB_Group1 [style=dashed, label="Uses"];
+    OPSMGR01 -> DB_Group2 [style=dashed, label="Uses"];
+    RDSCB -> DB_Group2 [style=dashed, label="Uses"];
+    WSUS01 -> DB_Group3 [style=dashed, label="Uses"];
+
+    // RDS Farm connections
+    RDSCB -> RDSSH01 [style=dashed, label="Manages"];
+    RDSCB -> RDSSH02 [style=dashed, label="Manages"];
+    RDSGW -> RDSWEB [style=dashed];
+
+    // System Center connections
+    MECM01 -> MECM02 [style=dashed, label="Site Hierarchy"];
+    OPSMGR01 -> OPSMGR02 [style=dashed, label="Management Group"];
+}

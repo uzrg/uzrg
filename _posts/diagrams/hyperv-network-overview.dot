@@ -1,0 +1,121 @@
+digraph HyperVNetworkOverview {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=filled];
+    edge [dir=none];
+
+    // Internet Layer
+    Internet [label="Internet", shape=cloud, fillcolor=lightblue, width=2];
+
+    // Physical Network Interface
+    subgraph cluster_physical_network {
+        label="Physical Network Interfaces";
+        style=filled;
+        fillcolor=lightgray;
+        rank=same;
+
+        WAN [label="WAN Interface\n(External)", fillcolor=yellow, width=1.5];
+        LAN [label="LAN Interface\n(Internal)", fillcolor=lightgreen, width=1.5];
+    }
+
+    // Host Server
+    subgraph cluster_host {
+        label="SUPERLAB Host Server";
+        style=filled;
+        fillcolor=lightsteelblue;
+
+        Host [label="Windows Server 2022 Datacenter\nAMD EPYC 3251 8-Core\n255.89 GB RAM | 8005.8 GB Storage\nHyper-V Role Enabled", fillcolor=lightblue, height=1.2];
+    }
+
+    // Virtual Network Layer
+    subgraph cluster_virtual_network {
+        label="Virtual Network Infrastructure";
+        style=filled;
+        fillcolor=lightyellow;
+
+        vSwitch_External [label="External Virtual Switch\n(WAN Access)", fillcolor=yellow, width=1.8];
+        vSwitch_Internal [label="Internal Virtual Switch\n(LAN Trunk)", fillcolor=lightgreen, width=1.8];
+    }
+
+    // Domain Services Layer
+    subgraph cluster_domain_services {
+        label="Active Directory Domain Services";
+        style=filled;
+        fillcolor=lightpink;
+        rank=same;
+
+        AD_Services [label="myhomelab.hv.lab Domain\nDNS Services\nDHCP Services", fillcolor=lightpink, height=1];
+    }
+
+    // Domain Controllers
+    subgraph cluster_domain_controllers {
+        label="Domain Controllers";
+        style=filled;
+        fillcolor=lightcyan;
+        rank=same;
+
+        DC01 [label="DC01\nPrimary Domain Controller\nRunning | 1504 MB", fillcolor=lightcyan];
+        DC02 [label="DC02\nSecondary Domain Controller\nRunning | 1326 MB", fillcolor=lightcyan];
+    }
+
+    // Application Services Layer
+    subgraph cluster_app_services {
+        label="Application Services";
+        style=filled;
+        fillcolor=lightseagreen;
+        rank=same;
+
+        SQL_Cluster [label="SQL Server Always On\nSQL01, SQL02, SQL03\nAvailability Group", fillcolor=lightseagreen];
+        RDS_Farm [label="Remote Desktop Services\nConnection Broker | Gateway\nSession Hosts", fillcolor=lightseagreen];
+    }
+
+    // Management Services Layer
+    subgraph cluster_mgmt_services {
+        label="Management Services";
+        style=filled;
+        fillcolor=lightsalmon;
+        rank=same;
+
+        SCCM_Services [label="System Center\nMECM01, MECM02\nOPSMGR01, OPSMGR02", fillcolor=lightsalmon];
+        DevOps_Services [label="DevOps Infrastructure\nDEVOPS01\nAzure DevOps Server", fillcolor=lightsalmon];
+    }
+
+    // Infrastructure Services Layer
+    subgraph cluster_infra_services {
+        label="Infrastructure Services";
+        style=filled;
+        fillcolor=lightgoldenrodyellow;
+        rank=same;
+
+        Network_Services [label="Network Services\nOpSense Firewall\nWSUS Server", fillcolor=lightgoldenrodyellow];
+        File_Services [label="File Services\nFS01 File Server\nVMM01 VMM Server", fillcolor=lightgoldenrodyellow];
+    }
+
+    // Network flow from top to bottom
+    Internet -> WAN;
+    WAN -> Host;
+    LAN -> Host;
+    Host -> vSwitch_External;
+    Host -> vSwitch_Internal;
+
+    vSwitch_Internal -> AD_Services;
+    AD_Services -> DC01;
+    AD_Services -> DC02;
+
+    vSwitch_Internal -> SQL_Cluster;
+    vSwitch_Internal -> RDS_Farm;
+    vSwitch_Internal -> SCCM_Services;
+    vSwitch_Internal -> DevOps_Services;
+    vSwitch_Internal -> Network_Services;
+    vSwitch_Internal -> File_Services;
+
+    // External access
+    vSwitch_External -> Network_Services;
+
+    // Service dependencies
+    SQL_Cluster -> SCCM_Services [style=dashed, label="Database"];
+    SQL_Cluster -> DevOps_Services [style=dashed, label="Database"];
+    SQL_Cluster -> RDS_Farm [style=dashed, label="Database"];
+
+    DC01 -> DC02 [style=dashed, label="AD Replication"];
+}
