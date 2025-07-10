@@ -47,16 +47,19 @@ I recommend implementing this PowerShell script as a PowerShell Profile to ensur
 To clone and use the PowerShell profile, you can use any of the following methods:
 
 **HTTPS Clone:**
+
 ```bash
 git clone https://github.com/uzrg/psprofile.git
 ```
 
 **SSH Clone (requires SSH key setup):**
+
 ```bash
 git clone git@github.com:uzrg/psprofile.git
 ```
 
 **GitHub CLI:**
+
 ```bash
 gh repo clone uzrg/psprofile
 ```
@@ -68,7 +71,7 @@ Visit the repository page and click "Code" → "Download ZIP"
 
 ### Local Site Customization
 
-If you have added the above PowerShell script to a PowerShell Profile, you can open the repository with Visual Studio Code using the following command:
+If you have added the above PowerShell script to a PowerShell Profile, you can open the repository with VSCode using the following command:
 
 ```
 code $devOpsPath\<repo directory>
@@ -108,10 +111,11 @@ url: "https://<your github username>.github.io"
 #### Authors, Contact, and Share Configuration
 
 > Navigate to `_data/origin` to update the following files:
+>
 > - `authors.yml`
 > - `contact.yml`
 > - `share.yml`
-> {: .prompt-tip }
+>   {: .prompt-tip }
 >
 > These YAML files are self-explanatory. Review and customize them according to your preferences.
 
@@ -150,31 +154,37 @@ Once the local site meets your requirements and is ready for production, it can 
 Follow these steps for deployment:
 
 1. **Configure GitHub remote origin:**
+
    ```bash
    git remote add origin https://github.com/<your github username>/<your github project>.git
    ```
 
 2. **Check repository status:**
+
    ```bash
    git status
    ```
 
 3. **Stage changes:**
+
    ```bash
    git add *
    ```
 
 4. **Commit changes:**
+
    ```bash
    git commit -m "Initial site setup and customization"
    ```
 
 5. **Add Linux platform support:**
+
    ```bash
    bundle lock --add-platform x86_64-linux
    ```
 
 6. **Commit platform support:**
+
    ```bash
    git commit -m "Add Linux platform support for GitHub Actions"
    ```
