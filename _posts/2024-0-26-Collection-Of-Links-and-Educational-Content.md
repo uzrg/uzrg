@@ -150,7 +150,7 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 
 > ℹ️ **Learning Tips:**<br>
 >
-> - Read Jeffrey Snover's Monad Manifesto for PowerShell architectural understanding<br>
+> - Read Jeffrey Snover's Monad Manifesto for to understand PowerShell origins<br>
 > - John Savill's content provides comprehensive Azure and Windows Server coverage<br>
 > - David Bombal offers practical network engineering laboratories<br>
 > - Patch My PC focuses on enterprise software deployment strategies<br>
