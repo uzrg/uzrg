@@ -226,22 +226,28 @@ This page documents my Hyper-V homelab environment running on a Supermicro serve
     <text x="630" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">3-Node Cluster</text>
 
     <rect x="450" y="600" width="360" height="50" rx="5" fill="#e1bee7"/>
-    <text x="630" y="630" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">WSUS Server</text>
+    <text x="630" y="625" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">Network Services</text>
+    <text x="630" y="640" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">DHCP01 & VMM01</text>
 
     <!-- Application Services -->
     <rect x="870" y="410" width="400" height="250" rx="10" fill="#fff3e0" stroke="#ffb74d" stroke-width="1"/>
     <text x="1070" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="16">Application Services</text>
 
-    <rect x="890" y="460" width="360" height="50" rx="5" fill="#ffe0b2"/>
-    <text x="1070" y="485" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">RDS Farm</text>
-    <text x="1070" y="500" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">5 Servers</text>
+    <rect x="890" y="460" width="170" height="50" rx="5" fill="#ffe0b2"/>
+    <text x="975" y="485" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">RDS Farm</text>
+    <text x="975" y="500" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">5 Servers</text>
 
-    <rect x="890" y="530" width="360" height="50" rx="5" fill="#ffe0b2"/>
-    <text x="1070" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">System Center</text>
-    <text x="1070" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">MECM & OPSMGR</text>
+    <rect x="1080" y="460" width="170" height="50" rx="5" fill="#ffe0b2"/>
+    <text x="1165" y="485" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">DevOps & Files</text>
+    <text x="1165" y="500" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">DEVOPS01 & FS01</text>
 
-    <rect x="890" y="600" width="360" height="50" rx="5" fill="#ffe0b2"/>
-    <text x="1070" y="630" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">Azure DevOps</text>
+    <rect x="890" y="530" width="170" height="50" rx="5" fill="#ffe0b2"/>
+    <text x="975" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">SCOM</text>
+    <text x="975" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">OPSMGR01 & 02</text>
+
+    <rect x="1080" y="530" width="170" height="50" rx="5" fill="#ffe0b2"/>
+    <text x="1165" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="12">MECM</text>
+    <text x="1165" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="10">MECM01, 02 & WSUS</text>
 
     <!-- Connection lines -->
     <line x1="175" y1="180" x2="400" y2="180" stroke="#333" stroke-width="3" marker-end="url(#arrow2)"/>
@@ -256,9 +262,10 @@ This page documents my Hyper-V homelab environment running on a Supermicro serve
     <line x1="500" y1="310" x2="630" y2="460" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
     <line x1="500" y1="310" x2="630" y2="530" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
     <line x1="500" y1="310" x2="630" y2="600" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
-    <line x1="500" y1="310" x2="1070" y2="460" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
-    <line x1="500" y1="310" x2="1070" y2="530" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
-    <line x1="500" y1="310" x2="1070" y2="600" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
+    <line x1="500" y1="310" x2="975" y2="460" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
+    <line x1="500" y1="310" x2="975" y2="530" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
+    <line x1="500" y1="310" x2="1165" y2="460" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
+    <line x1="500" y1="310" x2="1165" y2="530" stroke="#333" stroke-width="2" marker-end="url(#arrow2)"/>
   </svg>
 </div>
 
@@ -348,23 +355,20 @@ Complete RDS deployment providing virtual desktop and application services:
 - **RDSSH01:** Session Host 1 providing virtual desktop sessions
 - **RDSSH02:** Session Host 2 providing additional capacity and redundancy
 
-### System Center Configuration Manager
+### System Center Configuration Manager (MECM)
 
 Enterprise system management and software deployment:
 
 - **MECM01:** MECM Primary Site Server managing the entire infrastructure
 - **MECM02:** MECM Secondary Site Server providing distributed management
+- **WSUS01:** Windows Server Update Services serving as Software Update Point (SUP) for MECM
 
-### System Center Operations Manager
+### System Center Operations Manager (SCOM)
 
 Infrastructure monitoring and alerting:
 
 - **OPSMGR01:** Management Server 1 providing monitoring services
 - **OPSMGR02:** Management Server 2 providing redundancy and load balancing
-
-### Windows Server Update Services
-
-- **WSUS01:** Update Server managing Windows updates and serving as Software Update Point (SUP) for MECM
 
 ### DevOps & File Services
 
@@ -406,16 +410,30 @@ Both Configuration Manager and Operations Manager feature:
 - Distributed data processing
 - High availability monitoring and management
 
-## Service Dependencies
+## Service Dependency Hierarchy
 
-The infrastructure is designed with clear service dependencies:
+```
+Physical Host (SUPERLAB)
+├── Network Services (OpSense, VMM01, DHCP01)
+├── Core Services
+│   ├── Active Directory Domain Services (DC01, DC02)
+│   ├── Active Directory Certificate Services (DC01)
+│   └── SQL Always On (SQL01, SQL02, SQL03)
+├── Application Services (depend on Core Services)
+│   ├── System Center (MECM01, MECM02, OPSMGR01, OPSMGR02)
+│   ├── RDS Farm (RDSCB, RDSGW, RDSLC, RDSSH01, RDSSH02)
+│   └── DevOps & Files (DEVOPS01, FS01)
+└── Update Services
+    └── WSUS01 (integrates with MECM)
+```
+
+## Service Dependencies Summary
 
 1. **SQL Server Always On** provides database services to:
    - Azure DevOps Server
    - System Center Configuration Manager
    - System Center Operations Manager
    - Remote Desktop Services Connection Broker
-   - Windows Server Update Services
 
 2. **Active Directory** provides authentication services to all domain-joined systems
 
@@ -432,9 +450,9 @@ The network is segmented into logical zones:
 - **Internal Network:** Protected internal services including:
   - Core infrastructure services (AD, DNS, DHCP)
   - Database services (SQL Always On)
-  - Application services (RDS, System Center)
+  - Application services (RDS, SCOM, MECM)
   - File and DevOps services
 
 ## Resource Allocation
 
-The Supermicro server with 255.89 GB RAM and 8TB storage efficiently hosts my homelab infrastructure, allowing me to experiment with enterprise capabilities for continuous learning.
+The Supermicro server with 255.89 GB RAM and 8TB storage is sufficient to hosts my homelab, allowing me to experiment with enterprise capabilities for learning and testing.
