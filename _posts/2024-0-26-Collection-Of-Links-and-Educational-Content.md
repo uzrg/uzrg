@@ -150,15 +150,15 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 
 > ℹ️ **Learning Tips:**<br>
 >
-> - Read Jeffrey Snover's Monad Manifesto for to understand PowerShell origins<br>
+> - Read Jeffrey Snover's Monad Manifesto for to truly understand PowerShell origins<br>
 > - John Savill's content provides comprehensive Azure and Windows Server coverage<br>
-> - David Bombal offers practical network engineering laboratories<br>
+> - David Bombal offers practical network engineering labs<br>
 > - Patch My PC focuses on enterprise software deployment strategies<br>
 > - freeCodeCamp provides structured DevOps and programming learning paths<br>
-> - IT Education Network combines theoretical concepts with practical applications<br>
-> - Compare LLMs objectively using LM Arena<br>
-> - Kevin Holman's blog offers deep System Center and monitoring insights<br>
-> - Blake Drumm provides practical SCOM and PowerShell automation guidance<br>
+> - IT Education Network youtube channel provide well structured video trainings on multiple topics<br>
+> - Compare LLMs objectively using LMArena<br>
+> - Kevin Holman's blog offers deep insights into System Center Operation Manager<br>
+> - Blake Drumm provides practical SCOM and PowerShell automation tips and scripts<br>
 > - Thomas Maurer covers Azure, PowerShell, and cloud infrastructure topics<br>
 
 _Contribute to this list: <a href="https://github.com/uzrg/uzrg/blob/main/_posts/2024-03-26-collection-of-links.md" target="_blank">Edit on GitHub</a>_
