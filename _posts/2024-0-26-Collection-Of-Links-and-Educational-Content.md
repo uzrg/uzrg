@@ -153,10 +153,10 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 > - Read Jeffrey Snover's Monad Manifesto for to truly understand PowerShell origins<br>
 > - John Savill's content provides comprehensive Azure and Windows Server coverage<br>
 > - David Bombal offers practical network engineering labs<br>
-> - Patch My PC focuses on enterprise software deployment strategies<br>
+> - Patch My PC youtube channel provide great SCCM/ConfigMgr training<br>
 > - freeCodeCamp provides structured DevOps and programming learning paths<br>
 > - IT Education Network youtube channel provide well structured video trainings on multiple topics<br>
-> - Compare LLMs objectively using LMArena<br>
+> - LMArena can help you compare various LLMs<br>
 > - Kevin Holman's blog offers deep insights into System Center Operation Manager<br>
 > - Blake Drumm provides practical SCOM and PowerShell automation tips and scripts<br>
 > - Thomas Maurer covers Azure, PowerShell, and cloud infrastructure topics<br>
