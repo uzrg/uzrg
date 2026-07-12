@@ -10,10 +10,12 @@ pin: false
 # Phase 0: surveying before building
 
 Before touching anything in the next phase of the SUPERLAB build-out, I
-ran a read-only survey of every VM in the lab — what's actually running,
-what's actually configured, and whether Active Directory is healthy enough
-to build on top of. No changes were made this pass; the goal was just an
-honest inventory.
+had the agent run a read-only survey of every VM in the lab — what's
+actually running, what's actually configured, and whether Active
+Directory is healthy enough to build on top of. No changes were made this
+pass; the goal was just an honest inventory, and everything below is the
+agent's findings as it reported them, checked against the guardrails
+before I signed off on publishing this.
 
 ## Active Directory: healthy
 
