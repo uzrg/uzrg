@@ -44,6 +44,8 @@ than halfway through a phase.
 
 ## What's next
 
-Write-up went to the operator for review. Once the build order is
-confirmed, Phase 1 starts with the core plumbing (file services + DHCP),
-working outward from the two healthy domain controllers.
+The full findings are logged and waiting on my own sign-off before any
+build work starts — the scope turned out bigger than planned, so it's
+worth confirming the build order deliberately rather than just diving in.
+Once that's settled, Phase 1 starts with the core plumbing (file services
++ DHCP), working outward from the two healthy domain controllers.
