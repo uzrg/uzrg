@@ -35,6 +35,14 @@ resurfaced on FS01's own pre-staged object. Lesson: a pre-staged account
 only helps if whatever provisions the machine actually knows to reuse it.
 Otherwise it's a landmine waiting for the first real join.
 
+DHCP01's own job — actually serving DHCP — is still not switched on. SSH to
+pfSense is disabled, and the agent won't touch it even read-only without
+that access, so it has no independent way to check whether pfSense is
+already handing out addresses on any of the VLANs DHCP01 is meant to serve.
+Creating scopes blind, on top of an existing DHCP server, is exactly the
+kind of conflict worth avoiding. Scope creation stays parked until I confirm
+that myself.
+
 ## FS01: three ways an unattended install goes quiet
 
 FS01 had no operating system at all, just an empty disk and a mounted
