@@ -13,8 +13,10 @@ gem "jekyll", "~> 4.3.0"  # Updated to match Chirpy's requirements
 #   gem "github-pages"
 # end
 
-# Specify Chirpy theme directly from GitHub
-gem "jekyll-theme-chirpy", git: "https://github.com/cotes2020/jekyll-theme-chirpy.git"
+# Specify Chirpy theme directly from GitHub, pinned to a release tag so
+# upstream changes (e.g. Ruby version requirements) can't silently break
+# CI - bump this deliberately, not implicitly on every build.
+gem "jekyll-theme-chirpy", git: "https://github.com/cotes2020/jekyll-theme-chirpy.git", tag: "v7.6.0"
 
 # Add required plugins explicitly
 group :jekyll_plugins do
