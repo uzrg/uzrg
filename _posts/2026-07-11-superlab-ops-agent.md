@@ -9,10 +9,13 @@ pin: false
 
 # Why an AI agent, and why now
 
-SUPERLAB has grown past the point where I can hold the whole build-out in
-my head between sessions — two domain controllers, a SQL Always On tier,
-an RDS farm, MECM, SCOM, DHCP, all wired together across VLANs behind
-pfSense. Before starting the next round of build work, I set up
+My homelab has grown past the point where I can hold the whole build-out
+together in a handful of sessions. These days, lab time comes at a steep
+premium — between the day job and everything else life asks for, there's
+rarely enough of it left to keep the whole picture in my head: two domain
+controllers, a SQL Always On tier, an RDS farm, MECM, SCOM, DHCP, all wired
+together across VLANs behind pfSense. Before starting the next round of
+build work, I set up
 Claude Code — an AI coding agent, not a script or a fixed automation
 pipeline — to run directly on the Hyper-V host and do the actual legwork:
 running diagnostics, surveying VMs, drafting reports, even drafting the
