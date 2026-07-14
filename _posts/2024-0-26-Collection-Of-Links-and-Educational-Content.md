@@ -39,7 +39,6 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 | Resource Name                | URL                                                                                                                           |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | The Monad Manifesto          | <a href="https://www.jsnover.com/Docs/MonadManifesto.pdf" target="_blank">https://www.jsnover.com/Docs/MonadManifesto.pdf</a> |
-| Jeffrey Snover Presentations | <a href="https://channel9.msdn.com/Blogs/jeffrey-snover" target="_blank">https://channel9.msdn.com/Blogs/jeffrey-snover</a>   |
 | Microsoft PowerShell Docs    | <a href="https://learn.microsoft.com/powershell/" target="_blank">https://learn.microsoft.com/powershell/</a>                 |
 | PowerShell.org               | <a href="https://powershell.org/" target="_blank">https://powershell.org/</a>                                                 |
 | PSKoans                      | <a href="https://github.com/vexx32/PSKoans" target="_blank">https://github.com/vexx32/PSKoans</a>                             |
@@ -72,6 +71,7 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 | Dan's Courses              | <a href="https://www.youtube.com/@danscourses" target="_blank">https://www.youtube.com/@danscourses</a>               |
 | DistroTube                 | <a href="https://www.youtube.com/@DistroTube" target="_blank">https://www.youtube.com/@DistroTube</a>                 |
 | Microsoft Mechanics        | <a href="https://www.youtube.com/@MSFTMechanics" target="_blank">https://www.youtube.com/@MSFTMechanics</a>           |
+| PowerShell Conference EU   | <a href="https://www.youtube.com/@PowerShellConferenceEU" target="_blank">https://www.youtube.com/@PowerShellConferenceEU</a> |
 
 ### Cloud Platforms
 
@@ -131,12 +131,16 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 | **InstructLab** (IBM)   | Open-source training framework, Apache 2.0 licensed          | <a href="https://instructlab.ai/" target="_blank">https://instructlab.ai/</a>               |
 | **Granite** (IBM)       | Enterprise models, Apache 2.0 licensed                       | <a href="https://www.ibm.com/granite" target="_blank">https://www.ibm.com/granite</a>       |
 | **Anthropic** (Claude)  | Proprietary models, commercial API access                    | <a href="https://claude.ai/" target="_blank">https://claude.ai/</a>                         |
-| **DeepSeek-R1**         | Proprietary models, free tier available                      | <a href="https://deepseek.com/" target="_blank">https://deepseek.com/</a>                   |
-| **OpenAI** (ChatGPT)    | Proprietary models, commercial API and subscription          | <a href="https://chat.openai.com/" target="_blank">https://chat.openai.com/</a>             |
+| **DeepSeek** (V4-Pro)   | Open-weight, MIT licensed, tops several open leaderboards on coding and reasoning | <a href="https://deepseek.com/" target="_blank">https://deepseek.com/</a>                   |
+| **Zhipu AI / Z.ai** (GLM-5.2) | Open-weight, MIT licensed, 1M-token context, coding/agentic-focused, competitive with frontier closed models at a fraction of the cost | <a href="https://huggingface.co/zai-org/GLM-5.2" target="_blank">https://huggingface.co/zai-org/GLM-5.2</a> |
+| **Alibaba** (Qwen)      | Open-weight, Apache 2.0 licensed, strong coding-focused releases (Qwen3-Coder, Qwen 3.6 Plus) | <a href="https://qwen.ai/" target="_blank">https://qwen.ai/</a>                            |
+| **Moonshot AI** (Kimi)  | Open-weight models, strong long-horizon agentic and tool-use performance | <a href="https://www.kimi.com/" target="_blank">https://www.kimi.com/</a>                    |
+| **MiniMax** (M3)        | Open-weight, 1M-token context, native multimodality with frontier coding performance | <a href="https://www.minimax.io/" target="_blank">https://www.minimax.io/</a>                |
+| **OpenAI** (ChatGPT)    | Proprietary models, commercial API and subscription          | <a href="https://chatgpt.com/" target="_blank">https://chatgpt.com/</a>             |
 | **Meta** (Llama)        | Custom license, open weights with usage restrictions         | <a href="https://llama.meta.com/" target="_blank">https://llama.meta.com/</a>               |
 | **Google** (Gemini)     | Proprietary models, integrated with Google services          | <a href="https://gemini.google.com/" target="_blank">https://gemini.google.com/</a>         |
 | **Microsoft** (Copilot) | Proprietary models, integrated with Microsoft 365            | <a href="https://copilot.microsoft.com/" target="_blank">https://copilot.microsoft.com/</a> |
-| **xAI** (Grok)          | Proprietary models, integrated with X platform               | <a href="https://grok.x.ai/" target="_blank">https://grok.x.ai/</a>                         |
+| **xAI** (Grok)          | Proprietary models, integrated with X platform               | <a href="https://grok.com/" target="_blank">https://grok.com/</a>                         |
 | **LM Arena (LMSYS)**    | Open-source evaluation platform, Apache 2.0 licensed         | <a href="https://lmarena.ai" target="_blank">https://lmarena.ai</a>                         |
 
 ### General IT Skills
@@ -156,7 +160,9 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 > - Patch My PC youtube channel provide great SCCM/ConfigMgr training<br>
 > - freeCodeCamp provides structured DevOps and programming learning paths<br>
 > - IT Education Network youtube channel provide well structured video trainings on multiple topics<br>
+> - PowerShell Conference EU youtube channel has excellent recorded conference talks from the wider PowerShell community<br>
 > - LMArena can help you compare various LLMs<br>
+> - Several of the strongest open-weight models right now (GLM, Qwen, Kimi, DeepSeek, MiniMax) come from Chinese labs and are worth evaluating on merit alongside the usual Western options<br>
 > - Kevin Holman's blog offers deep insights into System Center Operation Manager<br>
 > - Blake Drumm provides practical SCOM and PowerShell automation tips and scripts<br>
 > - Thomas Maurer covers Azure, PowerShell, and cloud infrastructure topics<br>
