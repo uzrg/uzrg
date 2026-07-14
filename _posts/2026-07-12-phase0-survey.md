@@ -1,5 +1,5 @@
 ---
-title: SUPERLAB Build-Out - Phase 0 Survey Results
+title: Homelab Build-Out - Phase 0 Survey Results
 author: uzrg
 date: 2026-07-12 00:00:00 +0800
 categories: [Blogging, Homelab, Virtualization, Microsoft, HyperV, Windows Server]
