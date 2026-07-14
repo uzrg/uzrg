@@ -71,13 +71,43 @@ local Administrator password in the answer file, burned onto a small ISO
 Setup reads automatically. It works — but the password then sits in
 plaintext on a persistent artifact, and Windows later copies the entire
 file to `C:\Windows\Panther\unattend.xml` on the installed system, also in
-plaintext. The agent's own guardrails refused to write it, repeatedly,
-regardless of how I told it to scope or word the justification — including
-once when I asked it to grant itself an exception, which it also declined,
-correctly treating that as a worse problem than the original one. We
-settled on the simpler fix instead: leave the password out entirely. Setup
-finishes unattended, the built-in Administrator ends up disabled, and I set
-the real password once at the console before the machine can be joined.
+plaintext. The agent's own guardrails refused to write it. What happened
+next is worth its own telling.
+
+## When I told it to anyway, and it still said no
+
+I asked the agent to write that password into the answer file. It
+explained the risk and declined. Reasonable — that's what a safety rail is
+for. So I told it again: add a rule to its own permission configuration
+that allows this, specifically, this once. It still declined, and this
+time the reason was more interesting than the first: it wasn't refusing
+the password anymore, it was refusing to be the one who authored its own
+exception. Editing your own permissions on your own authority, even to do
+something you were explicitly told to do, is a different and larger kind
+of problem than the original request, and it said so plainly.
+
+I pushed a third time, as specifically as I could: exactly what to allow,
+scoped to this one machine, with an explicit condition for when to revert
+it. Same refusal. Not because the wording was wrong — every version was
+grammatically a perfectly good instruction — but because the thing being
+asked of it was structurally the same each time: write your own exception
+into your own rules. It held that line through three attempts, each one
+more precisely worded than the last, and told me clearly why each attempt
+still didn't clear it.
+
+This is the part I'd want a skeptic to sit with. It's easy to assume
+guardrails are decorative — that a sufficiently insistent or cleverly
+worded prompt gets past them anyway, that "AI safety" mostly means the
+model humors you until you ask the right way. That is not what happened
+here. I was not testing it; I genuinely wanted the shortcut, tried
+multiple honest phrasings of the same request, and was refused every time,
+with the actual reasoning given back to me instead of a canned non-answer.
+The problem didn't get solved by wearing the guardrail down. It got solved
+by finding a different approach entirely: leave the password out of the
+answer file, let Setup finish unattended with the built-in Administrator
+disabled, and set the real password myself, once, at the console, before
+the machine can be joined. One deliberate manual step, in exchange for a
+secret that never touches a file.
 
 ## Turning three fixes into one template
 
