@@ -1,5 +1,5 @@
 ---
-title: SUPERLAB Build-Out — Phase 1, and Building a Repeatable OS Template
+title: Homelab Build-Out — Phase 1, OS Install the Hard Way, Then Building a Repeatable OS Template
 author: uzrg
 date: 2026-07-13 00:00:00 +0800
 categories: [Blogging, Homelab, Virtualization, Microsoft, HyperV, Windows Server]
