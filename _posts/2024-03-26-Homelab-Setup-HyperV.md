@@ -2,8 +2,8 @@
 title: Home Lab Setup - HyperV
 author: uzrg
 date: 2024-03-26 00:34:00 +0800
-categories: [Blogging, Tutorial, Homelab, Virtualization, Microsoft, HyperV, Windows Server, Linux]
-tags: [Microsoft, HyperV, Windows, Windows Server, Ubuntu]
+categories: [Homelab, Virtualization]
+tags: [Microsoft, HyperV, Windows, Windows Server, Ubuntu, CentOS, Linux]
 pin: true
 ---
 
@@ -46,7 +46,7 @@ AMD EPYC 3251 8-Core  ·  255.89 GB RAM  ·  8005.8 GB Storage
 │   ├── SQL03        Secondary Replica ─┘
 │   ├── SQLAGL01     Availability Group Listener
 │   ├── SQLCLU01     Windows Failover Cluster
-│   ├── CAUSQLCL4bu  Cluster Virtual Network
+│   ├── VLAN20       Cluster / Replication Network
 │   └── Databases hosted on Always On AG
 │       ├── AzureDevOps_Configuration  ·  AzureDevOps_myhomelab
 │       ├── CM_MHL  (MECM site database)
@@ -59,8 +59,7 @@ AMD EPYC 3251 8-Core  ·  255.89 GB RAM  ·  8005.8 GB Storage
 │   ├── RDSGW        Gateway & Web Access
 │   ├── RDSLC        License Server
 │   ├── RDSSH01      Session Host 1
-│   ├── RDSSH02      Session Host 2
-│   └── RDSWEB       Web Access
+│   └── RDSSH02      Session Host 2
 │
 ├── System Center Configuration Manager
 │   ├── MECM01       Primary Site Server  (Active)
@@ -75,9 +74,9 @@ AMD EPYC 3251 8-Core  ·  255.89 GB RAM  ·  8005.8 GB Storage
 │   ├── DEVOPS01     Azure DevOps Server
 │   └── FS01         File Server
 │
-└── Offline Systems
-    ├── UBUNTU       Ubuntu Server                      Status: Off
-    └── CENTOS01     CentOS Server                      Status: Off
+└── Linux Systems
+    ├── UBUNTU01     Ubuntu Server
+    └── CENTOS01     CentOS Server
 ```
 
 ### Network Overview
@@ -102,8 +101,8 @@ Internet  (WAN)
         │   └── Databases  →  DevOps  ·  MECM  ·  SCOM  ·  RDS Broker  ·  SUSDB (WSUS)
         │
         ├── Remote Desktop Services
-        │   ├── RDSCB  ·  RDSGW  ·  RDSLC       Core services
-        │   └── RDSSH01  ·  RDSSH02  ·  RDSWEB  Session hosts
+        │   ├── RDSCB  ·  RDSGW  ·  RDSLC  Core services
+        │   └── RDSSH01  ·  RDSSH02        Session hosts
         │
         ├── System Center Configuration Manager
         │   ├── MECM01  (Active)  ·  MECM02  (Standby)
@@ -177,10 +176,10 @@ Infrastructure monitoring and alerting:
 - **DEVOPS01:** Azure DevOps Server providing source control, build, and deployment services
 - **FS01:** File Server providing centralized file storage and sharing
 
-### Offline Systems
+### Linux Systems
 
-- **UBUNTU:** Ubuntu Server (Status: Off) - Available for Linux workloads
-- **CENTOS01:** CentOS Server (Status: Off) - Available for Linux workloads
+- **UBUNTU01:** Ubuntu Server - available for Linux workloads
+- **CENTOS01:** CentOS Server - available for Linux workloads
 
 ## High Availability Features
 
