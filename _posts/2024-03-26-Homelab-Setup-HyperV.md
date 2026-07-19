@@ -119,6 +119,57 @@ Internet  (WAN)
             └── VMM01                            Virtual Machine Manager
 ```
 
+### Virtual Switch Architecture
+
+Two Hyper-V virtual switches carry all traffic. Inter-VLAN routing
+happens entirely in software on pfSense — there's no physical VLAN
+trunk anywhere in this design, only a virtual one:
+
+```
+Virtual Switch Manager
+│
+├── External-VSwitch-WAN         External  ·  bound to a physical NIC
+│   └── pfSense (WAN NIC)        Untagged  ·  internet uplink
+│
+└── Internal-VSwitch-LAN-TRUNK   Internal  ·  no physical NIC — routing stays virtual
+    │
+    ├── pfSense (LAN NIC)        Trunk  ·  VLANs 10, 20, 30, 40
+    │   └── Inter-VLAN routing handled entirely by pfSense
+    │
+    ├── VLAN 10 — Servers                 Access mode
+    │   └── DC01 · DC02 · DHCP01 · FS01 · MECM01/02 · NPS01 · OPSMGR01
+    │       RDSCB · RDSGW · RDSLC · RDSSH01/02 · VMM01 · WSUS01 · DEVOPS01
+    │       SQL01 · SQL02 · SQL03  (first NIC)
+    │
+    ├── VLAN 20 — Cluster / Replication   Access mode
+    │   └── SQL01 · SQL02 · SQL03  (second NIC)
+    │
+    └── VLAN 30 / VLAN 40 — Reserved      Trunked through, unassigned
+```
+
+Every VM gets a single access-mode NIC tagged to its VLAN, invisible
+to the guest OS. pfSense is the only trunk exception, carrying all
+four VLANs on one NIC. SQL01–03 are the only other dual-homed VMs,
+with a second NIC on VLAN 20 for cluster/replication traffic.
+
+For reference, here's how it is done with PowerShell:
+
+```powershell
+# Create the two virtual switches
+New-VMSwitch -Name "External-VSwitch-WAN" -NetAdapterName "<physical NIC>" -AllowManagementOS $true
+New-VMSwitch -Name "Internal-VSwitch-LAN-TRUNK" -SwitchType Internal
+
+# pfSense: WAN NIC stays untagged, LAN NIC becomes an 802.1Q trunk
+Set-VMNetworkAdapterVlan -VMName pfSense -VMNetworkAdapterName "WAN" -Untagged
+Set-VMNetworkAdapterVlan -VMName pfSense -VMNetworkAdapterName "LAN" -Trunk -AllowedVlanIdList "10,20,30,40" -NativeVlanId 0
+
+# Every other VM: one access-mode NIC per VLAN
+Set-VMNetworkAdapterVlan -VMName <VMName> -VMNetworkAdapterName <NICName> -Access -VlanId 10
+
+# SQL nodes: second NIC dedicated to cluster/replication traffic
+Set-VMNetworkAdapterVlan -VMName SQL01 -VMNetworkAdapterName <ClusterNIC> -Access -VlanId 20
+```
+
 ## Infrastructure Components
 
 ### Network & Security Infrastructure
@@ -201,7 +252,6 @@ Dual domain controllers ensure:
 - Automatic replication of Active Directory data
 - Redundant DNS services
 - High availability authentication services
-- Geographic distribution of directory services
 
 ### System Center Redundancy
 
