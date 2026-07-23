@@ -4,3 +4,45 @@
 @use 'main';
 
 /* append your custom style below */
+
+/* Gallery tab */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.gallery-item {
+  margin: 0;
+
+  a {
+    display: block;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    border: 1px solid var(--main-border-color, rgba(0, 0, 0, 0.125));
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  figcaption {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-muted-color, #808080);
+
+    a {
+      display: inline;
+      aspect-ratio: unset;
+      overflow: visible;
+      border: none;
+      color: inherit;
+      text-decoration: underline;
+    }
+  }
+}
