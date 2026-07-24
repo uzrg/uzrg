@@ -1,0 +1,135 @@
+# Gallery data file — one entry per screenshot.
+#
+# Fields:
+#   file      required — filename only, lives in assets/img/gallery/
+#   platform  required — top-level section: "Hyper-V Lab" or "VMware"
+#   category  required — sub-section within a platform (free text, grouped automatically)
+#   caption   required — short caption shown under the thumbnail
+#   post      optional — path to a blog post this screenshot relates to, for a "read more" link
+#
+# New entries are appended to the bottom of their category as they're added;
+# display order follows list order (chronological-ish), not alphabetical.
+
+- file: host-hyperv-manager-console.png
+  platform: Hyper-V Lab
+  category: Host & Hyper-V
+  caption: "Hyper-V Manager console overview"
+  post: /posts/Homelab-Setup-HyperV/
+
+- file: host-virtual-switch-manager.png
+  platform: Hyper-V Lab
+  category: Host & Hyper-V
+  caption: "Virtual Switch Manager configuration"
+  post: /posts/Homelab-Setup-HyperV/
+
+- file: host-supermicro-properties.png
+  platform: Hyper-V Lab
+  category: Host & Hyper-V
+  caption: "SUPERLAB host hardware properties"
+
+- file: host-ipmi-bmc-console.png
+  platform: Hyper-V Lab
+  category: Host & Hyper-V
+  caption: "Supermicro IPMI/BMC remote console"
+
+- file: host-storage-pool.png
+  platform: Hyper-V Lab
+  category: Host & Hyper-V
+  caption: "Host storage pool configuration"
+
+- file: dc01-active-directory-users-computers.png
+  platform: Hyper-V Lab
+  category: Active Directory
+  caption: "DC01 — Active Directory Users and Computers"
+  post: /posts/phase0-survey/
+
+- file: dc01-dns-manager.png
+  platform: Hyper-V Lab
+  category: Active Directory
+  caption: "DC01 — DNS Manager"
+  post: /posts/phase0-survey/
+
+- file: dc01-services-console.png
+  platform: Hyper-V Lab
+  category: Active Directory
+  caption: "DC01 — Services console"
+  post: /posts/phase0-survey/
+
+- file: dc01-adcs-certification-authority.png
+  platform: Hyper-V Lab
+  category: Active Directory
+  caption: "DC01 — AD CS Certification Authority console"
+  post: /posts/phase2-pki-gmsa/
+
+- file: pfsense-console-menu.png
+  platform: Hyper-V Lab
+  category: Networking (pfSense)
+  caption: "pfSense console menu"
+
+- file: pfsense-web-vlan-tags.png
+  platform: Hyper-V Lab
+  category: Networking (pfSense)
+  caption: "pfSense web GUI — VLAN tagging"
+
+- file: pfsense-web-user-manager.png
+  platform: Hyper-V Lab
+  category: Networking (pfSense)
+  caption: "pfSense web GUI — User Manager"
+
+- file: sql-ag-dashboard.png
+  platform: Hyper-V Lab
+  category: SQL Always On
+  caption: "SQL Always On Availability Group dashboard"
+  post: /posts/sql-ag-build/
+
+- file: mecm-site-status.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "MECM site status overview"
+  post: /posts/mecm-build-ha-boundaries-first-app/
+
+- file: mecm-system-roles.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "MECM system roles"
+  post: /posts/mecm-build-ha-boundaries-first-app/
+
+- file: mecm-operational-collections.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "Operational collection folder structure"
+  post: /posts/mecm-build-ha-boundaries-first-app/
+
+- file: mecm-deployment-collections.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "Deployment collection folder structure"
+  post: /posts/mecm-build-ha-boundaries-first-app/
+
+- file: mecm-ip-boundaries.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "IP-based boundaries and boundary group"
+  post: /posts/mecm-build-ha-boundaries-first-app/
+
+- file: mecm-yubico-content-distribution-error.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "Yubico Smart Card Minidriver — content distribution stuck in Error"
+
+- file: mecm-yubico-deployment-no-content.png
+  platform: Hyper-V Lab
+  category: MECM
+  caption: "Yubico Smart Card Minidriver deployment — no content available on the DP"
+
+- file: wks01-yubikey-inserted.png
+  platform: Hyper-V Lab
+  category: YubiKey Smart Card Logon
+  caption: "YubiKey inserted on WKS01, ready for PIN"
+  post: /posts/yubikey-piv-smartcard-logon/
+
+- file: wks01-yubikey-smartcard-logon.png
+  platform: Hyper-V Lab
+  category: YubiKey Smart Card Logon
+  caption: "WKS01 — YubiKey PIV smart card logon"
+  post: /posts/yubikey-piv-smartcard-logon/
