@@ -80,14 +80,38 @@ of process — checkpoints existing and getting used exactly as intended
 is the process working. The point of a `Checkpoint-Lab` habit only
 lands during the moment you actually need to undo something.
 
+## A detour: Package instead of Application, and why
+
+Before any of that, an earlier session had already tried MECM01 as the
+distribution point once and walked away from it, because content
+wasn't copying for the Yubico app at all. The distribution manager log
+gave a specific-sounding reason: *"the package is a content type
+package. There is nothing to be copied over."* ConfigMgr treats a
+modern Application and a legacy Package + Program as genuinely
+different content types internally, so that wording left open a real
+possibility — maybe this only broke for Applications specifically.
+
+Worth testing in isolation rather than assuming: the Yubico Application
+(the original object) was deleted and rebuilt as a legacy Package +
+Program instead, under the standing authorization to delete and
+recreate the deployment if that turned out to be necessary. The legacy
+package hit the identical "nothing copied" failure. Theory disproven —
+the bug had nothing to do with Application versus Package, and by the
+time the real causes were found and fixed, the Package + Program
+version was already the object sitting there working, so it stayed
+that way rather than being rebuilt back into an Application for no
+functional reason. All four machines in the pilot are deployed through
+that legacy package today. Converting it to a proper Application —
+regaining supersedence, requirement rules, a real detection method
+instead of a script — is on the list, just not yet done.
+
 ## Pivoting to MECM01, and finding a real, fixable defect
 
 FS01 stayed broken with its root cause never identified. Rather than
 stand up a new VM, the plan shifted to the site server itself, MECM01,
-as the distribution point — something the agent had initially treated
-as a dead end after an earlier session found that a distribution point
-co-located with the site server "has nothing to be copied over" for
-any package type. Looking again with fresh eyes turned up why: MECM01's
+as the distribution point once more — this time with the Package-vs-
+Application question already answered. Looking again with fresh eyes
+turned up why content never copied the first time around: MECM01's
 distribution point had, from the very start, been pointed at FS01's
 **shared UNC content library**, not a local drive — matching the
 original plan to centralize content on FS01, but apparently never
