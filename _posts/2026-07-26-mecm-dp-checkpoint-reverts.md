@@ -12,27 +12,29 @@ mermaid: false
 
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
-`0x80040154` COM registration error — five clean fix attempts, five
-identical failures, no root cause found. Before bed that night I told
-the agent to keep going without me: try whatever it needed to,
-including deleting and rebuilding the Yubico deployment from scratch if
-that turned out to be necessary, and report back in the morning.
-That's a wide grant to leave running unsupervised, and a wide grant on
-live infrastructure invites exactly the kind of mistake this post is
-mostly about. Two of them were bad enough to need a full checkpoint
-revert. A third wasn't a checkpoint revert at all, and cost more time
-than either one — a "fix" applied hours earlier in the same session,
-for a different symptom, that was backwards from the start and had to
-be undone before anything else could work.
+`0x80040154` COM registration error — five fix attempts, five failures,
+no root cause found. Before bed that night I told the agent to keep
+going without me: try whatever it needed, including deleting and
+rebuilding the Yubico deployment from scratch if that turned out to be
+necessary, and report back in the morning. That's a wide grant to leave
+running unsupervised, and a wide grant on live infrastructure invites
+the kind of surprises this post is mostly about. Two of them were bad
+enough to need a full checkpoint revert — a restore to snapshot, in
+non-Hyper-V terms. A third wasn't a checkpoint revert at all: an IIS
+configuration edit the agent botched, then caught and diagnosed
+entirely on its own. The surprising part is that fixing it required my
+approval, even though the original edit that caused the mistake never
+needed any permission at all.
 
-**Bottom line, for anyone skimming:** the Yubico Smart Card Minidriver
-is now installed on four machines through the real ConfigMgr pipeline —
-WKS01 that night, then FS01, WSUS01, and DHCP01 added the following
-day. FS01 is back to being a clean file server, nothing ConfigMgr-related
-left on it. MECM01 is the working distribution point. Getting there
-took two Hyper-V checkpoint reverts, one config revert of an earlier
-mistaken fix, one self-inflicted IIS configuration corruption caught
-and repaired mid-session, and — in the next day's follow-up work — an
+**Bottom line, for anyone skimming:** I'm pleased with how this session
+ended. The Yubico Smart Card Minidriver deployed successfully to the
+pilot machines once the content library and distribution point role
+were relocated to MECM01 for good — WKS01 that night, then FS01,
+WSUS01, and DHCP01 added the following day. FS01 is back to being a
+clean file server, nothing ConfigMgr-related left on it. Getting there
+took two Hyper-V checkpoint reverts, one config mishap caught and fixed
+mid-session, one earlier misdiagnosis that had to be undone before
+anything else could work, and — in the next day's follow-up work — an
 Active Directory schema extension that turned out to be unnecessary and
 a stopped Windows service that took far longer than it should have to
 explain.
@@ -162,10 +164,15 @@ own along the way: hand-editing `applicationHost.config` to configure
 the trace introduced a duplicate XML element that IIS's schema doesn't
 allow, breaking the site's own configuration reads outright — on a box
 that also hosts the Management Point for the entire ConfigMgr site, so
-this was never a contained mistake. Caught immediately, flagged to me
-before touching anything further, fixed with a single duplicate line
-removed once I signed off. Confirmed the site was fully healthy again
-before moving on to anything else.
+this was never a contained mistake. The agent caught it on its own,
+without me watching, and flagged it to me before touching anything
+further rather than trying to quietly patch its way out. Worth noting
+plainly: no permission gate had stood between the agent and the edit
+that caused the problem in the first place — hand-editing a config
+file wasn't flagged as risky going in. Only the *correction* needed my
+sign-off, an asymmetry that's worth sitting with. Fixed with a single
+duplicate line removed once I approved it. Confirmed the site was
+fully healthy again before moving on to anything else.
 
 With tracing actually working, the trace showed the real request
 completing authentication cleanly and then getting rejected by the
