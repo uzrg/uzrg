@@ -90,40 +90,13 @@ intended *is* the process working. A `Checkpoint-Lab` habit only pays
 for itself in the moment you actually need to undo something, and that
 night it paid for itself twice.
 
-## A detour worth explaining: Package instead of Application
-
-Before either of those two mistakes, an earlier session had already
-tried MECM01 as the distribution point once and walked away from it,
-because content wasn't copying for the Yubico app at all. The
-distribution manager log gave a specific-sounding reason: *"the package
-is a content type package. There is nothing to be copied over."*
-ConfigMgr treats a modern Application and a legacy Package + Program as
-genuinely different content types internally, so that wording left
-open a real possibility worth ruling out rather than assuming away:
-maybe this only broke for Applications specifically.
-
-That was worth testing in isolation. The Yubico Application — the
-original deployment object — was deleted and rebuilt as a legacy
-Package + Program instead, under the standing authorization to delete
-and recreate the deployment if that turned out to be necessary. The
-legacy package hit the identical "nothing copied" failure. Theory
-disproven: the bug had nothing to do with Application versus Package.
-By the time the real causes were found and fixed, though, the Package +
-Program version was already the object sitting there working, so it
-stayed that way rather than getting rebuilt back into an Application
-for no functional reason. All four machines in the pilot are deployed
-through that legacy package today. Converting it to a proper
-Application — regaining supersedence, requirement rules, a real
-detection method instead of a script — is on the list, just not done
-yet.
-
 ## Pivoting to MECM01, and finding a real, fixable defect
 
 FS01 stayed broken, root cause still unidentified. Rather than stand up
 a new VM, the plan shifted to the site server itself, MECM01, as the
-distribution point once more — this time with the Package-versus-
-Application question already settled. Looking again with fresh eyes
-turned up why content had never copied the first time around: MECM01's
+distribution point — not the first time MECM01 had been tried for this,
+as it turns out, but more on that in a moment. Looking again with fresh
+eyes turned up why content had never actually copied: MECM01's
 distribution point had, from the very start, been pointed at FS01's
 **shared UNC content library**, not a local drive — matching the
 original plan to centralize content on FS01, but apparently never
@@ -132,7 +105,7 @@ site's real content library onto a local drive on MECM01, and this
 time actual file content landed where it was supposed to.
 
 That fixed one wall and immediately hit a second, worse one: both
-MECM01 and MECM02 (still carrying leftover configuration from the
+MECM01 and MECM02 (still carrying leftover configuration from an
 earlier detour) started returning `401 Unauthorized` to every content
 request — the real ConfigMgr client, and a manual test, both. Not a
 permissions problem in the ordinary sense: granting `Everyone: Full
@@ -183,6 +156,35 @@ WebDAV module itself, deep inside request handling — confirming the
 hours-old "fix" was the actual cause all along. Reverting the handler's
 verb list back to its ConfigMgr default cleared the 401 immediately, on
 a direct test and then on the real client.
+
+## A detour worth explaining: Package instead of Application
+
+One more piece worth rewinding for, before wrapping up what actually
+worked: before FS01's metabase theory or MECM02 ever entered the
+picture, an earlier session had already tried MECM01 as the
+distribution point once and walked away from it, because content
+wasn't copying for the Yubico app at all. The distribution manager log
+gave a specific-sounding reason: *"the package is a content type
+package. There is nothing to be copied over."* ConfigMgr treats a
+modern Application and a legacy Package + Program as genuinely
+different content types internally, so that wording left open a real
+possibility worth ruling out rather than assuming away: maybe this only
+broke for Applications specifically.
+
+That was worth testing in isolation. The Yubico Application — the
+original deployment object — was deleted and rebuilt as a legacy
+Package + Program instead, under the standing authorization to delete
+and recreate the deployment if that turned out to be necessary. The
+legacy package hit the identical "nothing copied" failure. Theory
+disproven: the bug had nothing to do with Application versus Package.
+By the time the real causes were found and fixed, though, the Package +
+Program version was already the object sitting there working, so it
+stayed that way rather than getting rebuilt back into an Application
+for no functional reason. All four machines in the pilot are deployed
+through that legacy package today. Converting it to a proper
+Application — regaining supersedence, requirement rules, a real
+detection method instead of a script — is on the list, just not done
+yet.
 
 ## What finally worked
 
