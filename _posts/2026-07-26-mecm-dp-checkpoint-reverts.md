@@ -8,7 +8,7 @@ pin: false
 mermaid: false
 ---
 
-# Going to sleep on an unresolved defect
+# Going to sleep on an unresolved failure
 
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
