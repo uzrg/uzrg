@@ -37,8 +37,9 @@ mid-session, one earlier misdiagnosis that had to be undone before
 anything else could work, and — in the next day's follow-up work — two
 more distinct snags: a real Active Directory schema extension that
 never actually paid off, forcing a site code to be hardcoded into what
-was meant to be a domain-agnostic script, and a stopped Windows network
-service on one of the three new servers that took far longer than it
+was meant to be a domain-agnostic script for installing the MECM
+client, and a stopped Windows network service on one of the three new
+servers that took far longer than it
 should have to explain.
 
 ## Mistake #1: picking MECM02 without checking what it was for
@@ -232,9 +233,11 @@ correctly. The management point's own identity never did, even after a
 full service restart. Rather than keep chasing a feature that wasn't
 paying off, the script got a straightforward edit instead: the site
 code and the management point are both hardcoded now. That's a real
-step back from the original design — the script isn't domain-agnostic
-anymore, it's tied to this specific lab — but it's the pragmatic fix
-given AD publishing never delivered a working management point record.
+step back from the original design — this was meant to be a
+domain-agnostic script for installing the MECM client on any target
+machine, and it isn't domain-agnostic anymore, it's tied to this
+specific lab — but it's the pragmatic fix given AD publishing never
+delivered a working management point record.
 The schema extension itself is additive and harmless to leave in
 place; the feature it was meant to enable just never got used.
 
