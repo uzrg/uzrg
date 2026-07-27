@@ -34,10 +34,12 @@ WSUS01, and DHCP01 added the following day. FS01 is back to being a
 clean file server, nothing ConfigMgr-related left on it. Getting there
 took two Hyper-V checkpoint reverts, one config mishap caught and fixed
 mid-session, one earlier misdiagnosis that had to be undone before
-anything else could work, and — in the next day's follow-up work — an
-Active Directory schema extension that turned out to be unnecessary and
-a stopped Windows service that took far longer than it should have to
-explain.
+anything else could work, and — in the next day's follow-up work — two
+more distinct snags: a real Active Directory schema extension that
+never actually paid off, forcing a site code to be hardcoded into what
+was meant to be a domain-agnostic script, and a stopped Windows network
+service on one of the three new servers that took far longer than it
+should have to explain.
 
 ## Mistake #1: picking MECM02 without checking what it was for
 
@@ -215,18 +217,26 @@ instead, built around discovering the management point through Active
 Directory publishing.
 
 That AD lookup depends on the ConfigMgr site actually being published
-to AD, which turned out to have never been configured at all in this
-domain. With my approval at each step — a schema extension isn't
-something to wave through casually, even in a lab — the agent extended
-the AD schema, created the publishing container, granted the site
-server rights to it, and enabled publishing. The site object showed up
-in AD correctly. The management point's own identity never did, even
-after a full service restart. Rather than keep chasing an AD feature
-this environment apparently doesn't need, the script got a
-straightforward edit instead: this lab has exactly one site and one
-management point, so it's hardcoded now rather than discovered. The
-schema extension itself is additive and harmless to leave in place, but
-the feature it was meant to enable went unused.
+to AD — the whole point of discovering the management point that way,
+instead of hardcoding it, was to keep the script domain-agnostic: drop
+it on any machine in any ConfigMgr-managed domain and let it work out
+its own site and management point, no editing required. That
+assumption turned out to be false here: AD publishing had never been
+configured in this domain at all. With my approval at each step — a
+schema extension isn't something to wave through casually, even in a
+lab — the agent extended the AD schema (a genuine, necessary
+prerequisite; ConfigMgr can't create or publish anything to AD without
+it), created the publishing container, granted the site server rights
+to it, and enabled publishing. The site object showed up in AD
+correctly. The management point's own identity never did, even after a
+full service restart. Rather than keep chasing a feature that wasn't
+paying off, the script got a straightforward edit instead: the site
+code and the management point are both hardcoded now. That's a real
+step back from the original design — the script isn't domain-agnostic
+anymore, it's tied to this specific lab — but it's the pragmatic fix
+given AD publishing never delivered a working management point record.
+The schema extension itself is additive and harmless to leave in
+place; the feature it was meant to enable just never got used.
 
 Two smaller bugs surfaced in the script under real use, both now fixed:
 a missing command-line switch caused ccmsetup's own background install
