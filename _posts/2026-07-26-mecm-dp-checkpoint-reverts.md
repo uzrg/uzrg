@@ -1,5 +1,5 @@
 ---
-title: Homelab Build-Out — The Distribution Point Saga, Two Checkpoint Reverts, and a Bad Diagnosis That Cost the Most Time
+title: Homelab Build-Out — The Distribution Point Saga, Resolved
 author: uzrg
 date: 2026-07-26 00:00:00 +0800
 categories: [Blogging, Homelab, Virtualization, Microsoft, HyperV, Windows Server]
