@@ -84,8 +84,8 @@ Set-CMBoundaryGroup -Name "SUPERLAB Default Boundary Group" -RemoveSiteSystemSer
 
 The first strips the stale DP role out of the site database; the
 second pulls MECM02 back out of the boundary group's site-system
-list. Both had to be run by hand — the snapshot only rewinds the
-guest, not the site server's own bookkeeping about it.
+list. Both had to be run because the snapshot only rewinds the guest,
+not the site server's own bookkeeping about it.
 
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
