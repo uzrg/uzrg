@@ -90,10 +90,12 @@ not the site server's own bookkeeping about it.
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
 With MECM02 off the table, the agent took a second run at FS01, this
-time comparing its installed Windows Features against a distribution
-point that worked. FS01 had `Web-Metabase` and `Web-Mgmt-Compat` —
-legacy IIS 6 metabase compatibility — installed; the working comparison
-box didn't. Plausible enough to test, so I approved removing them.
+time comparing its installed Windows Features against its own recall
+of a distribution point that had worked. FS01 had `Web-Metabase` and
+`Web-Mgmt-Compat` — legacy IIS 6 metabase compatibility — installed;
+its recollection was that the working comparison box didn't.
+Plausible enough to test, so when the agent asked for permission to
+remove them, I approved.
 
 Checkpointed first
 (`agent-20260725-1557-Pre-remove-IIS6-Metabase-compat-DP-fix-attempt`),
