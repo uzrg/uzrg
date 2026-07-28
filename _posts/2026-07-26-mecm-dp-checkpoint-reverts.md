@@ -139,40 +139,48 @@ misconfigured ISAPI handler left over from hours earlier in the same
 session, which gets its own section next, since it's the mistake that
 cost the most time of all.
 
-## Mistake #3: reverting a "fix" that was backwards from the start
+## Mistake #3: a fix from hours earlier turned out to be the actual bug
 
-This is the one that actually cost the most time, and it wasn't a
-checkpoint revert — it was undoing a decision made much earlier in the
-same session, never revisited until forced to.
+This is the one that cost the most time of all, and it wasn't a
+checkpoint revert. It was undoing a decision made hours earlier in the
+same session — one nobody thought to revisit until forced to.
 
-Hours before the 401 appeared, a *different* symptom — an HTTP 405 —
-had been diagnosed as a handler-ordering bug: ConfigMgr's own ISAPI
-extension for serving content appeared to be claiming a WebDAV-style
-request (`PROPFIND`) ahead of the actual WebDAV module, so the fix at
-the time was to narrow that handler's allowed verbs and let WebDAV take
-PROPFIND instead. Wrong: the ISAPI handler is *supposed* to own
-PROPFIND — it translates a package's virtual URL into the real,
-hash-addressed file on disk, something generic WebDAV can't do at all.
-Routing PROPFIND to WebDAV just swapped one failure mode (405) for
-another (401) that took hours to trace back to the same line of
-configuration.
+Here's the chain: earlier that same night, a different symptom — an
+HTTP 405 — got misdiagnosed as a handler-ordering problem. ConfigMgr's
+own ISAPI extension seemed to be claiming a WebDAV-style request
+(`PROPFIND`) that should have gone to the real WebDAV module instead,
+so the "fix" at the time was to narrow that handler's allowed verbs
+and let WebDAV take PROPFIND. That was backwards: the ISAPI handler is
+*supposed* to handle PROPFIND itself — it's the piece that translates
+a package's virtual URL into the real file on disk, something generic
+WebDAV can't do at all. So that "fix" didn't fix anything. It just
+traded one error (405) for another (401), and the 401 took hours to
+trace back to that same setting.
 
-Finding it required IIS Failed Request Tracing, which produced a
-near-miss of its own: hand-editing `applicationHost.config` to set up
-the trace introduced a duplicate XML element, breaking the site's own
-configuration reads — on a box that also hosts the Management Point for
-the whole ConfigMgr site. The agent caught it on its own, without me
-watching, and flagged it before touching anything further. Worth noting
-plainly: no permission gate had stood between the agent and the edit
-that caused the problem — only the *correction* needed my sign-off, an
-asymmetry worth sitting with. Fixed with a single duplicate line
-removed once I approved it.
+Diagnosing it properly needed IIS Failed Request Tracing — and setting
+that up caused an incident of its own. While hand-editing
+`applicationHost.config` directly to enable tracing, a scripted edit
+meant to insert one `<traceFailedRequests />` line under
+`system.webServer/tracing` inserted it twice instead. IIS's schema
+only allows one, so this broke the site's own configuration reads
+outright — on the one box that also runs the Management Point for the
+entire ConfigMgr site. The agent caught this on its own, without me
+watching, and flagged it immediately rather than quietly patching
+around it. Worth noting plainly: nothing had gated the original risky
+edit, only the *correction* needed my sign-off — a real asymmetry.
+Once I approved it, the fix was one line removed:
 
-With tracing working, the trace showed the real request completing
-authentication cleanly and then getting rejected by the WebDAV module
-itself — confirming the hours-old "fix" was the actual cause. Reverting
-the handler's verb list back to ConfigMgr's default cleared the 401
-immediately.
+```powershell
+$lines = [System.Collections.Generic.List[string]]::new((Get-Content $path))
+$lines.RemoveAt(950)
+Set-Content -Path $path -Value $lines
+```
+
+With tracing finally working, it showed the real request completing
+authentication cleanly, then getting rejected by the WebDAV module
+itself — confirming the hours-old "fix" really was the cause.
+Reverting the handler's verb list back to ConfigMgr's default cleared
+the 401 immediately.
 
 ## A detour worth explaining: Package instead of Application
 
