@@ -72,8 +72,8 @@ distribution-point duty was scope creep into a box with a different job
 waiting for it.
 
 I caught this the next time I checked in and asked — "why using
-MECM02, it was supposed to be passive HA!" — and had it reverted
-rather than patched around. The fix was a Hyper-V checkpoint restore
+MECM02, it was supposed to be passive HA!" — and the agent offered to
+reverse it rather than patch it around. The fix was a Hyper-V checkpoint restore
 back to `agent-20260724-1458-Pre-DP-role-addition`, followed by
 cleanup a VM snapshot doesn't reach: `Remove-CMDistributionPoint` to
 strip the stale DP role out of the site database, then
