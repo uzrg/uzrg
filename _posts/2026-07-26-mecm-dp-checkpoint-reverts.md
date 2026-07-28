@@ -111,24 +111,33 @@ process working.
 
 ## Pivoting to MECM01, and finding a real, fixable defect
 
-FS01 stayed broken, root cause still unidentified. Rather than stand up
-a new VM, the plan shifted to the site server itself, MECM01 — not the
-first time it had been tried for this, but more on that below. Looking
-again with fresh eyes turned up why content had never actually copied:
-MECM01's distribution point had, from the very start, been pointed at
-FS01's **shared UNC content library**, not a local drive — matching the
-original plan to centralize content on FS01, but apparently never
-working end to end. `Move-CMContentLibrary` relocated the site's real
-content library onto a local drive on MECM01, and this time actual file
-content landed where it was supposed to.
+FS01 stayed broken, root cause still unidentified. Rather than let the
+agent's tendency to keep reaching for one more FS01 theory run its
+course, I stepped in directly: clean the MECM footprint off FS01
+entirely and put full focus on MECM01 instead — not the first time
+MECM01 had been tried for this, but more on that below. Looking again
+with fresh eyes, the agent found why content had never actually copied
+on that first attempt: MECM01's distribution point was still pointed
+at FS01's **shared UNC content library**, not a local drive — matching
+the original plan to centralize content on FS01, but that had, of
+course, never actually worked, and somehow the agent's own earlier
+attempt missed updating this setting when it first moved the content
+and the DP role over. This time, `Get-CMSite -SiteCode "MHL" |
+Move-CMContentLibrary -NewLocation "E:\SCCMContentLib"` relocated the
+site's real content library onto a local drive on MECM01, and actual
+file content landed where it was supposed to.
 
-That fixed one wall and immediately hit a second, worse one: both
-MECM01 and MECM02 started returning `401 Unauthorized` to every content
-request — the real ConfigMgr client, and a manual test, both. Not a
-permissions problem in the ordinary sense: granting `Everyone: Full
-Control` recursively on the content library changed nothing. Something
-deeper in ConfigMgr's own content-serving stack was rejecting every
-request, regardless of who was asking.
+That fixed one issue, but a second appeared immediately: both MECM01
+and MECM02 started returning `401 Unauthorized` to every content
+request. The agent ran both a real ConfigMgr client test and a manual
+request emulating one — both came back 401. Not a permissions problem
+in the ordinary sense: granting `Everyone: Full Control` recursively on
+the content library changed nothing at all. Something deeper in
+ConfigMgr's own content-serving stack was rejecting every request,
+regardless of who was asking — the culprit turned out to be a
+misconfigured ISAPI handler left over from hours earlier in the same
+session, which gets its own section next, since it's the mistake that
+cost the most time of all.
 
 ## Mistake #3: reverting a "fix" that was backwards from the start
 
