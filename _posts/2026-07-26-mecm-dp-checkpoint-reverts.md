@@ -71,14 +71,16 @@ been asked to fill yet but is supposed to stay clean for. Handing it
 distribution-point duty was scope creep into a box with a different job
 waiting for it.
 
-I caught this the next time I checked in — "why using MECM02, it was
-supposed to be passive HA!" — and had it reverted rather than patched
-around. The fix was a Hyper-V checkpoint restore back to
-`agent-20260724-1458-Pre-DP-role-addition`, followed by cleanup a VM
-snapshot doesn't reach: removing the stale distribution point role from
-the site database and pulling MECM02 back out of the boundary group.
-Both layers had to be undone by hand — the snapshot only rewinds the
-guest, not the site server's own bookkeeping about it.
+I caught this the next time I checked in and asked — "why using
+MECM02, it was supposed to be passive HA!" — and had it reverted
+rather than patched around. The fix was a Hyper-V checkpoint restore
+back to `agent-20260724-1458-Pre-DP-role-addition`, followed by
+cleanup a VM snapshot doesn't reach: `Remove-CMDistributionPoint` to
+strip the stale DP role out of the site database, then
+`Set-CMBoundaryGroup` to pull MECM02 back out of the boundary group's
+site-system list. Both layers had to be undone by hand — the snapshot
+only rewinds the guest, not the site server's own bookkeeping about
+it.
 
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
