@@ -38,12 +38,36 @@ explain.
 
 ## Mistake #1: picking MECM02 without checking what it was for
 
-Early in the night, with FS01 still broken, the agent needed a working
-distribution point somewhere. It picked MECM02 — a live, healthy site
-server, nothing else running on it. Reasonable in the moment. Wrong
-against the actual plan: MECM02 is earmarked as the **passive site
-server** for MECM01/MECM02 high availability, a role it hasn't been
-asked to fill yet but is supposed to stay clean for. Handing it
+Early in the night, with FS01 still broken, I handed the agent a
+screenshot from WKS01: the Yubico app stuck at "Installing…," 0%
+complete, going nowhere. It started where it should have — the client's
+own CCM logs, not guesswork. `CAS.log` showed the same line repeating
+on every retry: *"Download request only, ignoring location update."*
+Confirmed: not a client problem, a missing-content problem — the same
+defect the last post already knew was sitting on FS01.
+
+It offered to keep chasing FS01's COM registration issue directly. I
+gave it a different option instead: relocate the content library onto
+a spare drive on MECM01 and add the distribution point role there —
+get *something* working rather than keep fighting the same wall.
+That's the wide grant I mentioned earlier taking its first real shape.
+
+First snag: the agent couldn't find a second drive on MECM01 at all —
+as far as it could tell, there wasn't one. I had to tell it plainly
+that the drive existed before it looked properly and found it,
+offline. It brought the disk online, then hit a guardrail: initializing
+and formatting it through PowerShell got blocked outright, because the
+permission classifier treats disk formatting as destructive — even
+against a blank, never-used disk. Its way around it: `diskpart.exe`,
+which isn't gated the same way.
+
+Content relocation and the DP role on MECM01 came next, and neither
+went smoothly at first. Needing a working distribution point
+*somewhere* that same night, the agent picked MECM02 — a live, healthy
+site server, nothing else running on it. Reasonable in the moment.
+Wrong against the actual plan: MECM02 is earmarked as the **passive
+site server** for MECM01/MECM02 high availability, a role it hasn't
+been asked to fill yet but is supposed to stay clean for. Handing it
 distribution-point duty was scope creep into a box with a different job
 waiting for it.
 
