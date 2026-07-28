@@ -73,14 +73,19 @@ waiting for it.
 
 I caught this the next time I checked in and asked — "why using
 MECM02, it was supposed to be passive HA!" — and the agent offered to
-reverse it rather than patch it around. The fix was a Hyper-V checkpoint restore
-back to `agent-20260724-1458-Pre-DP-role-addition`, followed by
-cleanup a VM snapshot doesn't reach: `Remove-CMDistributionPoint` to
-strip the stale DP role out of the site database, then
-`Set-CMBoundaryGroup` to pull MECM02 back out of the boundary group's
-site-system list. Both layers had to be undone by hand — the snapshot
-only rewinds the guest, not the site server's own bookkeeping about
-it.
+reverse it rather than patch it around. The fix was a Hyper-V
+checkpoint restore back to `agent-20260724-1458-Pre-DP-role-addition`,
+followed by cleanup a VM snapshot doesn't reach:
+
+```
+Remove-CMDistributionPoint -SiteSystemServerName "MECM02.myhomelab.hv.lab" -SiteCode "MHL" -Force
+Set-CMBoundaryGroup -Name "SUPERLAB Default Boundary Group" -RemoveSiteSystemServerName "MECM02.myhomelab.hv.lab"
+```
+
+The first strips the stale DP role out of the site database; the
+second pulls MECM02 back out of the boundary group's site-system
+list. Both had to be run by hand — the snapshot only rewinds the
+guest, not the site server's own bookkeeping about it.
 
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
