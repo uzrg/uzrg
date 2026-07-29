@@ -141,35 +141,28 @@ cost the most time of all.
 
 ## Mistake #3: a fix from hours earlier turned out to be the actual culprit
 
-This is the one that cost the most time of all, and it wasn't a
-checkpoint revert. It was undoing a decision made hours earlier in the
-same session — one nobody thought to revisit until forced to.
+This is the one that most likely caused all the trouble. The details
+came out during a post-mortem — here's a summary of how the agent
+explained it: earlier that same night, it had been troubleshooting a
+different symptom, an HTTP 405 error tied to ConfigMgr's own ISAPI
+extension. The "fix" at the time was to narrow that handler's allowed
+verbs so WebDAV would take over a specific request type (`PROPFIND`)
+instead — backwards, since the ISAPI handler is supposed to handle
+that request itself. That "fix" didn't fix anything. It just traded
+one error (405) for another (401), and the 401 took hours to trace
+back to the same setting.
 
-Here's the chain: earlier that same night, a different symptom — an
-HTTP 405 — got misdiagnosed as a handler-ordering problem. ConfigMgr's
-own ISAPI extension seemed to be claiming a WebDAV-style request
-(`PROPFIND`) that should have gone to the real WebDAV module instead,
-so the "fix" at the time was to narrow that handler's allowed verbs
-and let WebDAV take PROPFIND. That was backwards: the ISAPI handler is
-*supposed* to handle PROPFIND itself — it's the piece that translates
-a package's virtual URL into the real file on disk, something generic
-WebDAV can't do at all. So that "fix" didn't fix anything. It just
-traded one error (405) for another (401), and the 401 took hours to
-trace back to that same setting.
-
-Diagnosing it properly needed IIS Failed Request Tracing — and setting
-that up caused an incident of its own. While hand-editing
-`applicationHost.config` directly to enable tracing, a scripted edit
-meant to insert one `<traceFailedRequests />` line under
+Diagnosing it properly meant enabling IIS Failed Request Tracing.
+While hand-editing `applicationHost.config` to turn tracing on, a
+scripted edit meant to insert one `<traceFailedRequests />` line under
 `system.webServer/tracing` inserted it twice instead. IIS's schema
 only allows one, so this broke the site's own configuration reads
-outright — on the one box that also runs the Management Point for the
-entire ConfigMgr site. The agent caught this on its own, without me
-watching, and flagged it immediately rather than quietly patching
-around it. Worth noting plainly: nothing had gated the original risky
-edit, only the *correction* needed my sign-off — a real asymmetry.
-Once I approved it, the fix was removing the duplicate. Before, under
-`system.webServer/tracing`:
+outright — on the Management Point for the entire ConfigMgr site. The
+agent caught this on its own, without me watching, and flagged it and
+requested permission to correct the config. Worth noting: nothing had
+gated the original risky edit, only the correction needed my sign-off
+— a surprising reality. I approved it, and the fix was removing the
+duplicate line. Before, under `system.webServer/tracing`:
 
 ```xml
 <tracing>
