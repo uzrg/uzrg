@@ -185,10 +185,13 @@ config had been silently preventing tracing from producing anything
 useful. Once tracing was finally working, it showed request after
 request completing authentication cleanly, confirming the
 handler-verb change from earlier was really the issue. Reverting the
-handler's verb list back to ConfigMgr's default — `*`, every verb —
-instead of the narrowed `GET,HEAD` it had been left with, cleared the
+handler's verb list — `verb="*"`, ConfigMgr's own default, instead of
+the narrowed `verb="GET,HEAD"` it had been left with — cleared the
 401 immediately, and the actual application content finally made it
-through.
+through. That setting lives in `applicationHost.config` itself, in the
+`system.webServer/handlers` section scoped to the distribution
+point's virtual directories, `SMS_DP_SMSPKG$` and
+`CCMTOKENAUTH_SMS_DP_SMSPKG$`.
 
 **A quick side note on why this mattered so much:** every IIS request
 handler is registered against a list of allowed HTTP verbs — the
