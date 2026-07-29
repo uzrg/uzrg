@@ -168,12 +168,22 @@ entire ConfigMgr site. The agent caught this on its own, without me
 watching, and flagged it immediately rather than quietly patching
 around it. Worth noting plainly: nothing had gated the original risky
 edit, only the *correction* needed my sign-off — a real asymmetry.
-Once I approved it, the fix was one line removed:
+Once I approved it, the fix was removing the duplicate. Before, under
+`system.webServer/tracing`:
 
-```powershell
-$lines = [System.Collections.Generic.List[string]]::new((Get-Content $path))
-$lines.RemoveAt(950)
-Set-Content -Path $path -Value $lines
+```xml
+<tracing>
+    <traceFailedRequests />
+    <traceFailedRequests />
+</tracing>
+```
+
+After — back to IIS's own default, a single instance:
+
+```xml
+<tracing>
+    <traceFailedRequests />
+</tracing>
 ```
 
 With tracing finally working, it showed the real request completing
