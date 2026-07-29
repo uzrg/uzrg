@@ -139,7 +139,7 @@ misconfigured ISAPI handler left over from hours earlier in the same
 session, which gets its own section next, since it's the mistake that
 cost the most time of all.
 
-## Mistake #3: a fix from hours earlier turned out to be the actual bug
+## Mistake #3: a fix from hours earlier turned out to be the actual culprit
 
 This is the one that cost the most time of all, and it wasn't a
 checkpoint revert. It was undoing a decision made hours earlier in the
