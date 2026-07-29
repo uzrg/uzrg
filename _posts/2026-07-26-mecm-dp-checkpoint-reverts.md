@@ -179,11 +179,15 @@ After — back to IIS's own default, a single instance:
 </tracing>
 ```
 
-Once tracing was finally working, it showed request after request
-completing authentication cleanly, confirming the handler-verb change
-from earlier was really the issue. Reverting the handler's verb list
-back to ConfigMgr's default cleared the 401 immediately, and the
-actual application content finally made it through.
+With the duplicate removed, IIS could finally generate the trace
+messages needed to diagnose the 401 in the first place — the broken
+config had been silently preventing tracing from producing anything
+useful. Once tracing was finally working, it showed request after
+request completing authentication cleanly, confirming the
+handler-verb change from earlier was really the issue. Reverting the
+handler's verb list back to ConfigMgr's default cleared the 401
+immediately, and the actual application content finally made it
+through.
 
 ## A detour worth explaining: Package instead of Application
 
