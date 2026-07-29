@@ -246,13 +246,11 @@ Application is still on the list, just not done yet.
   from the console entirely. Back to exactly its intended role — SQL
   Always On backups and the cluster file-share witness.
 - MECM02 fully reverted to its clean, untouched, pre-DP-work state.
+- The Yubico Smart Card Minidriver installed on WKS01 through the real
+  deployment pipeline.
 
 <img src="{{ '/assets/img/gallery/mecm-site-system-roles-no-fs01.png' | relative_url }}" alt="Servers and Site System Roles list in the ConfigMgr console showing seven servers with no FS01 entry">
 _Servers and Site System Roles: seven entries — FS01 gone from the console entirely, not just stripped of its distribution point role._
-
-The Yubico Smart Card Minidriver installed on WKS01 through the real
-deployment pipeline that same night, confirmed via the client's own
-execution log and the registry uninstall key — not a manual workaround.
 
 ## The next day: expanding the pilot, and one more real bug
 
