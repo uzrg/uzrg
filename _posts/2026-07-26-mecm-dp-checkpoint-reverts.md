@@ -209,24 +209,32 @@ correctly.
 
 ## A detour worth explaining: Package instead of Application
 
-One more piece worth rewinding for, before wrapping up: before FS01's
-metabase theory or MECM02 ever entered the picture, an earlier session
-had already tried MECM01 once and walked away, because content wasn't
-copying for the Yubico app at all. The distribution manager log gave a
-specific-sounding reason: *"the package is a content type package.
-There is nothing to be copied over."* ConfigMgr treats a modern
-Application and a legacy Package + Program as different content types
-internally, so maybe this only broke for Applications specifically —
-worth ruling out rather than assuming away.
+One more piece worth mentioning: after the agent declared victory —
+content distributed — I checked WKS01's Software Center myself and
+found nothing under installed applications. Went to MECM01's console
+to check deployments directly instead, and that's where I actually
+found it: the Yubico driver had been distributed as a legacy Package,
+not an Application, the way it had always been set up back when FS01
+was still the DP.
 
-The Yubico Application was deleted and rebuilt as a legacy Package +
-Program instead, under the standing authorization to recreate the
-deployment if necessary. Same failure. Theory disproven: the bug had
-nothing to do with Application versus Package. By the time the real
-causes were fixed, the Package + Program version was already the object
-sitting there working, so it stayed that way. All four pilot machines
-run on that legacy package today; converting it to a proper Application
-is on the list, just not done yet.
+I asked why. The answer traced back to earlier that same night, before
+FS01 troubleshooting had even wrapped up: the agent had seen a
+distribution manager log line reading *"the package is a content type
+package. There is nothing to be copied over."* ConfigMgr treats a
+modern Application and a legacy Package + Program as different content
+types internally, so the agent wanted to rule out whether content
+distribution was only broken for Applications, not Packages. The
+Yubico Application was deleted and rebuilt as a legacy Package +
+Program instead, under the standing wide-grant authorization to
+recreate the deployment if necessary.
+
+Same failure. Theory disproven — the issue had nothing to do with
+Application versus Package. By the time the real causes were found and
+fixed, the Package + Program version was already the object sitting
+there working, so it stayed that way. All four pilot machines run on
+that legacy package today, since that's what was already in place when
+I asked the agent to expand the pilot; converting it to a proper
+Application is still on the list, just not done yet.
 
 ## What finally worked
 
