@@ -41,26 +41,26 @@ installers by hand.
 
 ### Environment Setup Script
 
-The script lives at <a href="https://github.com/uzrg/psprofile" target="_blank">github.com/uzrg/psprofile</a>. It checks for existing installs of Git, VS Code, and Ruby across the usual install paths before offering to set up what's missing, then clones the theme repo. I load it as a PowerShell profile (`CurrentUserAllHosts`, at `~\Documents\WindowsPowerShell\Profile.ps1`) so it's available every time I open a console — worth doing the same if you expect to reuse it.
+The script lives at <a href="https://github.com/uzrg/powershell-toolkit" target="_blank">github.com/uzrg/powershell-toolkit</a> (the script itself is at `environment-setup/profile.ps1` inside the repo, which also now holds other admin scripts). It checks for existing installs of Git, VS Code, and Ruby across the usual install paths before offering to set up what's missing, then clones the theme repo. I load it as a PowerShell profile (`CurrentUserAllHosts`, at `~\Documents\WindowsPowerShell\Profile.ps1`) so it's available every time I open a console — worth doing the same if you expect to reuse it.
 
 Clone it with whichever method you're comfortable with:
 
 **HTTPS:**
 
 ```bash
-git clone https://github.com/uzrg/psprofile.git
+git clone https://github.com/uzrg/powershell-toolkit.git
 ```
 
 **SSH** (requires a key already set up):
 
 ```bash
-git clone git@github.com:uzrg/psprofile.git
+git clone git@github.com:uzrg/powershell-toolkit.git
 ```
 
 **GitHub CLI:**
 
 ```bash
-gh repo clone uzrg/psprofile
+gh repo clone uzrg/powershell-toolkit
 ```
 
 Or just open the repo page and use Code → Download ZIP.
