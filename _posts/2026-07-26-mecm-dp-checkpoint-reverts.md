@@ -271,14 +271,7 @@ both objects were fully populated. ConfigMgr just hadn't run its next
 AD-publish cycle yet. The script's since been reverted to real
 AD-based discovery.
 
-Two smaller script bugs also surfaced: a missing `/mp:` switch made
-ccmsetup's background install fall back to the same (then-unavailable)
-AD lookup and fail, and the success check trusted the wrong process
-exit instead of confirming the client service actually came up. DHCP01
-also had its network location service stopped, masking real
-connectivity; restarting the adapter fixed it.
-
-All three came up clean after that.
+All three came up clean.
 
 <img src="{{ '/assets/img/gallery/mecm-yubico-package-deployment-success.png' | relative_url }}" alt="ConfigMgr Deployments view showing the Yubico Smart Card Minidriver Silent Install deployment at 100 percent compliance across 4 assets, 0 errors">
 _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01, and DHCP01 all accounted for._
