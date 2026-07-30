@@ -32,9 +32,9 @@ night, then FS01, WSUS01, and DHCP01 the following day. FS01 is back to
 being a clean file server. Getting there took two checkpoint reverts,
 one config mishap caught and fixed mid-session, one earlier
 misdiagnosis undone before anything else could work, and — the next
-day — an Active Directory schema extension that never paid off and a
-stopped Windows service that took longer than it should have to
-explain.
+day — an Active Directory publishing feature written off as broken too
+soon, plus a stopped Windows service that took longer than it should
+have to explain.
 
 ## Mistake #1: picking MECM02 without checking what it was for
 
@@ -258,24 +258,27 @@ The following day's task was smaller: add FS01, WSUS01, and DHCP01 to
 the pilot deployment. None had the ConfigMgr client installed. Console
 client push got stopped by the session's safety controls as a real
 infrastructure change worth a second look, so I handed over a
-client-install script of mine instead, built around discovering the
-management point through Active Directory publishing — the whole point
-being a domain-agnostic script for installing the MECM client anywhere,
-no editing required.
+client-install script of mine instead — now published as
+[`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1)
+in my PowerShell toolkit repo — built around discovering the management
+point through Active Directory publishing, the whole point being a
+script that works against any site, no editing required.
 
-That assumption turned out to be false here: AD publishing had never
-been configured in this domain. With my approval at each step, the
-agent extended the AD schema (a genuine, necessary prerequisite —
+That night, AD publishing looked broken. With my approval at each step,
+the agent extended the AD schema (a genuine, necessary prerequisite —
 ConfigMgr can't publish anything to AD without it), created the
 publishing container, and enabled publishing. The site object showed up
-in AD correctly. The management point's own identity never did, even
-after a full service restart. Rather than keep chasing a feature that
-wasn't paying off, the script got a straightforward edit: the site code
-and the management point are both hardcoded now. That's a real step
-back — the script isn't domain-agnostic anymore, it's tied to this lab
-— but it's the pragmatic fix given AD publishing never delivered a
-working record. The schema extension itself is harmless to leave in
-place; the feature it was meant to enable just never got used.
+in AD right away; the management point's own identity didn't, even
+after a full service restart. Rather than keep waiting on something
+that looked stuck, the script got a straightforward edit that night:
+the site code and management point hardcoded, just to keep the pilot
+moving. That turned out to be premature — checking again days later,
+both the site and the management point were fully populated in AD.
+ConfigMgr republishes to AD on its own cycle, and the management
+point's identity simply hadn't gone through another pass yet when we
+gave up on it that night. The script's since been reverted to real
+AD-based discovery, no hardcoded site or server, matching what it was
+always meant to do.
 
 Two smaller bugs surfaced in the script itself: a missing command-line
 switch caused ccmsetup's background install to try — and fail — to
