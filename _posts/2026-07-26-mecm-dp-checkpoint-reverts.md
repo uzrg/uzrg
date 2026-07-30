@@ -311,10 +311,11 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
 
 The agent: every fix attempt on FS01 and MECM01/MECM02, both checkpoint
 restores and the ConfigMgr-side cleanup each needed, the Failed Request
-Tracing setup that isolated the 401, the FS01 teardown, the pilot
-expansion script and its fixes, and the first draft of this post. Me:
-the overnight go-ahead, catching the MECM02 scope mistake, approving
-the metabase theory test and the schema extension step by step, and
+Tracing setup that isolated the 401, the FS01 teardown, the bugs it
+found and fixed in the pilot expansion script, and the first draft of
+this post. Me: the overnight go-ahead, catching the MECM02 scope
+mistake, approving the metabase theory test and the schema extension
+step by step, supplying the client-install script itself, and
 signing off on the `applicationHost.config` repair.
 
 ## What's next
