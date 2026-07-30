@@ -252,7 +252,7 @@ Application is still on the list, just not done yet.
 <img src="{{ '/assets/img/gallery/mecm-site-system-roles-no-fs01.png' | relative_url }}" alt="Servers and Site System Roles list in the ConfigMgr console showing seven servers with no FS01 entry">
 _Servers and Site System Roles: seven entries — FS01 gone from the console entirely, not just stripped of its distribution point role._
 
-## The next day: expanding the pilot, and one more real bug
+## The next day: expanding the pilot
 
 The following day's task was smaller: add FS01, WSUS01, and DHCP01 to
 the pilot. None had the ConfigMgr client installed, and console client
