@@ -255,39 +255,28 @@ _Servers and Site System Roles: seven entries — FS01 gone from the console ent
 ## The next day: expanding the pilot, and one more real bug
 
 The following day's task was smaller: add FS01, WSUS01, and DHCP01 to
-the pilot deployment. None had the ConfigMgr client installed. Console
-client push got stopped by the session's safety controls as a real
-infrastructure change worth a second look, so I handed over a
+the pilot. None had the ConfigMgr client installed, and console client
+push got stopped by the session's safety controls, so I handed over a
 client-install script of mine instead — now published as
 [`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1)
-in my PowerShell toolkit repo — built around discovering the management
-point through Active Directory publishing, the whole point being a
-script that works against any site, no editing required.
+in my PowerShell toolkit repo — built to discover the management point
+via Active Directory publishing rather than hardcoding one.
 
-That night, AD publishing looked broken. With my approval at each step,
-the agent extended the AD schema (a genuine, necessary prerequisite —
-ConfigMgr can't publish anything to AD without it), created the
-publishing container, and enabled publishing. The site object showed up
-in AD right away; the management point's own identity didn't, even
-after a full service restart. Rather than keep waiting on something
-that looked stuck, the script got a straightforward edit that night:
-the site code and management point hardcoded, just to keep the pilot
-moving. That turned out to be premature — checking again days later,
-both the site and the management point were fully populated in AD.
-ConfigMgr republishes to AD on its own cycle, and the management
-point's identity simply hadn't gone through another pass yet when we
-gave up on it that night. The script's since been reverted to real
-AD-based discovery, no hardcoded site or server, matching what it was
-always meant to do.
+That night AD publishing looked broken: the site object appeared in
+AD, but the management point's identity never did, even after a
+restart. The agent extended the schema and enabled publishing (both
+genuine prerequisites), then hardcoded the site code and MP as a quick
+fix to keep the pilot moving. Premature — checking again days later,
+both objects were fully populated. ConfigMgr just hadn't run its next
+AD-publish cycle yet. The script's since been reverted to real
+AD-based discovery.
 
-Two smaller bugs surfaced in the script itself: a missing command-line
-switch caused ccmsetup's background install to try — and fail — to
-rediscover the management point through the same AD path just ruled
-out, and the success check trusted the wrong process exiting cleanly
-instead of confirming the client service had come up. DHCP01 also had
-its network location service stopped, which left Windows unable to
-confirm real connectivity even though the network was fine; restarting
-the network adapter cleared it immediately.
+Two smaller script bugs also surfaced: a missing `/mp:` switch made
+ccmsetup's background install fall back to the same (then-unavailable)
+AD lookup and fail, and the success check trusted the wrong process
+exit instead of confirming the client service actually came up. DHCP01
+also had its network location service stopped, masking real
+connectivity; restarting the adapter fixed it.
 
 All three came up clean after that.
 
