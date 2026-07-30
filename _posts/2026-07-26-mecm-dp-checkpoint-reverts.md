@@ -254,24 +254,27 @@ _Servers and Site System Roles: seven entries — FS01 gone from the console ent
 
 ## The next day: expanding the pilot
 
-The following day's task was smaller: add FS01, WSUS01, and DHCP01 to
-the pilot. None had the ConfigMgr client installed, and console client
-push got stopped by the session's safety controls, so I handed over a
-client-install script of mine instead — now published as
+The following day's task was smaller: expanding the Yubico deployment
+to FS01, WSUS01, and DHCP01. None had the ConfigMgr client installed,
+and console client push was stopped by the session's safety
+guardrails to ask for my sign-off. Instead of going through with the
+console client push, I handed the agent a client-install PowerShell
+script of mine instead — now published as
 [`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1)
-in my PowerShell toolkit repo — built to discover the management point
-via Active Directory publishing rather than hardcoding one.
+in my PowerShell toolkit repo. The script is built to discover the
+site code and management point via Active Directory publishing rather
+than hardcoding them.
 
-That night AD publishing looked broken: the site object appeared in
-AD, but the management point's identity never did, even after a
-restart. The agent extended the schema and enabled publishing (both
-genuine prerequisites), then hardcoded the site code and MP as a quick
-fix to keep the pilot moving. Premature — checking again days later,
-both objects were fully populated. ConfigMgr just hadn't run its next
-AD-publish cycle yet. The script's since been reverted to real
-AD-based discovery.
+The agent extended the schema and enabled publishing in Active
+Directory (both genuine prerequisites), but the objects didn't appear
+right away — it takes ConfigMgr some time to complete its AD-publishing
+cycle. That wasn't a show-stopper: the agent hardcoded the site code
+and MP as a quick fix to keep the pilot moving. Checking again days
+later, both objects were fully populated in AD, and the script's since
+been reverted to real AD-based discovery.
 
-All three came up clean.
+Monitoring the deployment from the ConfigMgr console showed it
+succeeding across all four targets.
 
 <img src="{{ '/assets/img/gallery/mecm-yubico-package-deployment-success.png' | relative_url }}" alt="ConfigMgr Deployments view showing the Yubico Smart Card Minidriver Silent Install deployment at 100 percent compliance across 4 assets, 0 errors">
 _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01, and DHCP01 all accounted for._
