@@ -281,24 +281,31 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
 
 ## Lessons learned
 
-- **A standing "keep going while I sleep" grant needs checkpoints more
-  than a supervised session does**, not less. Both real mistakes that
-  night were caught and undone cleanly because a checkpoint existed at
-  the right moment, not because the agent got everything right the
-  first time.
-- **A VM snapshot only rewinds the guest.** Reverting MECM02 needed the
-  checkpoint *and* a separate cleanup pass on the ConfigMgr site
-  database — the two layers don't sync automatically.
-- **The most expensive mistake wasn't a VM-level one at all.** A
-  plausible-sounding config change made hours earlier, for a different
-  symptom, turned a real bug into a much harder one to find. Config
-  changes deserve the same "will I need to undo this" scrutiny as
-  anything that gets a checkpoint — they just don't come with an undo
-  button built in.
-- **A confirmed symptom beats another plausible guess.** Every fix
-  attempt before Failed Request Tracing was a reasonable theory, tested
-  and discarded. The one that worked came from watching the request
-  pipeline directly instead of guessing at the next layer to blame.
+- **Letting the agent work unsupervised overnight means checkpoints
+  matter more, not less.** Both real mistakes that night were fixed
+  cleanly because a checkpoint existed at the right moment — not
+  because the agent got everything right the first time.
+- **A VM snapshot only undoes changes on the VM itself.** Undoing
+  MECM02's changes took two steps: restoring the checkpoint, *and*
+  manually cleaning up MECM02's entry in the ConfigMgr site database.
+  The two don't stay in sync automatically.
+- **The costliest mistake wasn't a VM problem at all.** A config change
+  made hours earlier, for a different problem, made a real bug much
+  harder to find later. Any config change deserves the same "will I
+  need to undo this?" thinking as something covered by a checkpoint —
+  it just doesn't come with an automatic undo button.
+- **A confirmed cause beats another guess.** Every fix tried before
+  Failed Request Tracing was a reasonable idea that turned out wrong.
+  The fix that actually worked came from watching the real requests
+  directly, instead of guessing at what else might be wrong.
+- **Permission requirements aren't symmetric.** Making the risky config
+  edit needed no approval at all; fixing the mess it caused did. Worth
+  keeping in mind when deciding what should actually require sign-off.
+- **A guardrail on one tool doesn't block the underlying action.**
+  PowerShell cmdlets like `Format-Volume` and `Remove-Item` were
+  blocked as too risky, but older tools that do the same thing —
+  `diskpart.exe`, `cmd /c rmdir` — weren't covered by the same
+  restriction, and got used instead.
 
 ## Division of labor
 
