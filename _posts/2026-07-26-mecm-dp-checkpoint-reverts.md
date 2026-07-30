@@ -321,8 +321,9 @@ signing off on the `applicationHost.config` repair.
 ## What's next
 
 The pilot sits at four machines with a working deployment pipeline.
-Converting the Yubico package into a proper Application is the obvious
-next step. Beyond that, the roadmap's next real phase is the RD
-Session-based farm — broker, gateway, licensing, and the session hosts
-— the first build to lean on the certificate authority and the
-Configuration Manager pipeline both landing cleanly before it.
+Converting the Yubico package back into a proper Application and
+rolling it out to the rest of the lab is the obvious next step — along
+with seeing how the agent handles staggered maintenance windows across
+different deployment rings. Beyond that, MECM work pauses for now:
+next up is the RD Session-based farm, then Operations Manager, Azure
+DevOps, and eventually some Linux work.
