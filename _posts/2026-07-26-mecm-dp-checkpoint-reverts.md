@@ -13,17 +13,15 @@ mermaid: false
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
 `0x80040154` COM registration error — five fix attempts, five failures,
-no root cause found. Before bed that night I told the agent to keep
-going without me: try whatever it needed, including deleting and
-rebuilding the Yubico deployment from scratch if necessary, and report
-back in the morning. A wide grant on live infrastructure invites the
-kind of surprises this post is about. Two were bad enough to need a
+no root cause. Before bed that night I told the agent to keep going
+without me: try whatever it needed, including rebuilding the Yubico
+deployment from scratch, and report back in the morning. A wide grant
+on live infrastructure invites surprises. Two were bad enough to need a
 full checkpoint revert — a restore to snapshot, in non-Hyper-V terms. A
 third wasn't a checkpoint revert at all: an IIS configuration edit the
-agent botched, then caught and diagnosed entirely on its own. The
-surprising part is that fixing it required my approval, even though the
-original edit that caused the mistake never needed any permission at
-all.
+agent botched, then caught and diagnosed on its own. The surprising
+part: fixing it required my approval, even though the edit that caused
+the mistake never needed any.
 
 **Bottom line:** I'm pleased with how this ended. The Yubico Smart Card
 Minidriver deployed to the pilot machines once the content library and
@@ -33,8 +31,7 @@ being a clean file server. Getting there took two checkpoint reverts,
 one config mishap caught and fixed mid-session, one earlier
 misdiagnosis undone before anything else could work, and — the next
 day — an Active Directory publishing feature written off as broken too
-soon, plus a stopped Windows service that took longer than it should
-have to explain.
+soon, plus a stopped Windows service that took too long to explain.
 
 ## Mistake #1: picking MECM02 without checking what it was for
 
@@ -47,35 +44,33 @@ Confirmed: not a client problem, a missing-content problem — the same
 defect the last post already knew was sitting on FS01.
 
 It offered to keep chasing FS01's COM registration issue directly. I
-gave it a different option instead: relocate the content library onto
-a spare drive on MECM01 and add the distribution point role there —
-get *something* working rather than keep fighting the same wall.
-That's the wide grant I mentioned earlier taking its first real shape.
+redirected it instead: relocate the content library onto a spare drive
+on MECM01 and add the distribution point role there — get *something*
+working rather than keep fighting the same wall. That's the wide grant
+I mentioned earlier taking its first real shape.
 
-First snag: the agent couldn't find a second drive on MECM01 at all —
-as far as it could tell, there wasn't one. I had to tell it plainly
-that the drive existed before it looked properly and found it,
-offline. It brought the disk online, then hit a guardrail: initializing
-and formatting it through PowerShell got blocked outright, because the
-permission classifier treats disk formatting as destructive — even
-against a blank, never-used disk. Its way around it: `diskpart.exe`,
-which isn't gated the same way.
+First snag: the agent couldn't find a second drive on MECM01 — as far
+as it could tell, there wasn't one. I told it plainly that the drive
+existed, and it found it, offline. Bringing the disk online hit
+another guardrail: formatting it through PowerShell got blocked
+outright, since the permission classifier treats disk formatting as
+destructive, even against a blank, never-used disk. Its way around it:
+`diskpart.exe`, which isn't gated the same way.
 
-Content relocation and the DP role on MECM01 came next, and neither
-went smoothly at first. Needing a working distribution point
-*somewhere* that same night, the agent picked MECM02 — a live, healthy
-site server, nothing else running on it. Reasonable in the moment.
-Wrong against the actual plan: MECM02 is earmarked as the **passive
-site server** for MECM01/MECM02 high availability, a role it hasn't
-been asked to fill yet but is supposed to stay clean for. Handing it
-distribution-point duty was scope creep into a box with a different job
-waiting for it.
+Content relocation and the DP role on MECM01 came next, neither smooth
+at first. Needing a working distribution point *somewhere* that same
+night, the agent picked MECM02 — a live, healthy site server with
+nothing else running on it. Reasonable in the moment, wrong against the
+actual plan: MECM02 is earmarked as the **passive site server** for
+MECM01/MECM02 high availability, a role it's supposed to stay clean for
+until asked to fill it. Handing it distribution-point duty was scope
+creep into a box with a different job waiting.
 
 I caught this the next time I checked in and asked — "why using
 MECM02, it was supposed to be passive HA!" — and the agent offered to
 reverse it rather than patch it around. The fix was a Hyper-V
 checkpoint restore back to `agent-20260724-1458-Pre-DP-role-addition`,
-followed by cleanup a VM snapshot doesn't reach:
+followed by cleanup that a VM snapshot doesn't reach:
 
 ```
 Remove-CMDistributionPoint -SiteSystemServerName "MECM02.myhomelab.hv.lab" -SiteCode "MHL" -Force
@@ -83,9 +78,9 @@ Set-CMBoundaryGroup -Name "SUPERLAB Default Boundary Group" -RemoveSiteSystemSer
 ```
 
 The first strips the stale DP role out of the site database; the
-second pulls MECM02 back out of the boundary group's site-system
-list. Both had to be run because the snapshot only rewinds the guest,
-not the site server's own bookkeeping about it.
+second pulls MECM02 back out of the boundary group's site-system list.
+Both were needed because the snapshot only rewinds the guest, not
+ConfigMgr's own bookkeeping about it.
 
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
@@ -112,57 +107,50 @@ process working.
 ## Pivoting to MECM01, and finding a real, fixable defect
 
 FS01 stayed broken, root cause still unidentified. Rather than let the
-agent's tendency to keep reaching for one more FS01 theory run its
-course, I stepped in directly: clean the MECM footprint off FS01
-entirely and put full focus on MECM01 instead — not the first time
-MECM01 had been tried for this, but more on that below. Looking again
-with fresh eyes, the agent found why content had never actually copied
-on that first attempt: MECM01's distribution point was still pointed
-at FS01's **shared UNC content library**, not a local drive — matching
-the original plan to centralize content on FS01, but that had, of
-course, never actually worked, and somehow the agent's own earlier
-attempt missed updating this setting when it first moved the content
-and the DP role over. This time, `Get-CMSite -SiteCode "MHL" |
-Move-CMContentLibrary -NewLocation "E:\SCCMContentLib"` relocated the
-site's real content library onto a local drive on MECM01, and actual
-file content landed where it was supposed to.
+agent keep reaching for one more FS01 theory, I stepped in directly:
+clean the MECM footprint off FS01 entirely, full focus on MECM01
+instead — not the first time MECM01 had been tried, more on that below.
+With fresh eyes, the agent found why content had never actually copied
+on that first attempt: MECM01's distribution point was still pointed at
+FS01's **shared UNC content library**, not a local drive — matching the
+original plan to centralize content on FS01, which had never actually
+worked, and which the agent's own earlier attempt had missed updating.
+This time, `Get-CMSite -SiteCode "MHL" | Move-CMContentLibrary
+-NewLocation "E:\SCCMContentLib"` relocated the site's real content
+library onto a local drive on MECM01, and actual file content landed
+where it was supposed to.
 
 That fixed one issue, but a second appeared immediately: both MECM01
 and MECM02 started returning `401 Unauthorized` to every content
-request. The agent ran both a real ConfigMgr client test and a manual
-request emulating one — both came back 401. Not a permissions problem
-in the ordinary sense: granting `Everyone: Full Control` recursively on
-the content library changed nothing at all. Something deeper in
-ConfigMgr's own content-serving stack was rejecting every request,
-regardless of who was asking — the culprit turned out to be a
+request — confirmed with both a real ConfigMgr client test and a
+manual one. Not an ordinary permissions problem: granting `Everyone:
+Full Control` recursively on the content library changed nothing.
+Something deeper in ConfigMgr's own content-serving stack was rejecting
+every request, regardless of who was asking — the culprit was a
 misconfigured ISAPI handler left over from hours earlier in the same
-session, which gets its own section next, since it's the mistake that
-cost the most time of all.
+session, the mistake that cost the most time of all, covered next.
 
 ## Mistake #3: a fix from hours earlier turned out to be the actual culprit
 
-This is the one that most likely caused all the trouble. The details
-came out during a post-mortem — here's a summary of how the agent
-explained it: earlier that same night, it had been troubleshooting a
-different symptom, an HTTP 405 error tied to ConfigMgr's own ISAPI
-extension. The "fix" at the time was to narrow that handler's allowed
-verbs so WebDAV would take over a specific request type (`PROPFIND`)
-instead — backwards, since the ISAPI handler is supposed to handle
-that request itself. That "fix" didn't fix anything. It just traded
-one error (405) for another (401), and the 401 took hours to trace
-back to the same setting.
+This is the one that most likely caused all the trouble. Per the
+agent's own post-mortem: earlier that same night, it had been
+troubleshooting a different symptom, an HTTP 405 tied to ConfigMgr's
+own ISAPI extension. The "fix" at the time was narrowing that handler's
+allowed verbs so WebDAV would take over a specific request type
+(`PROPFIND`) instead — backwards, since the ISAPI handler is supposed
+to handle that request itself. It traded one error (405) for another
+(401), and the 401 took hours to trace back to the same setting.
 
-Diagnosing it properly meant enabling IIS Failed Request Tracing.
-While hand-editing `applicationHost.config` to turn tracing on, a
-scripted edit meant to insert one `<traceFailedRequests />` line under
-`system.webServer/tracing` inserted it twice instead. IIS's schema
-only allows one, so this broke the site's own configuration reads
-outright — on the Management Point for the entire ConfigMgr site. The
-agent caught this on its own, without me watching, and flagged it and
-requested permission to correct the config. Worth noting: nothing had
-gated the original risky edit, only the correction needed my sign-off
-— backwards, if you stop to think about it. I approved it, and the fix
-was removing the duplicate line. Before, under `system.webServer/tracing`:
+Diagnosing it properly meant enabling IIS Failed Request Tracing. A
+scripted edit to `applicationHost.config`, meant to insert one
+`<traceFailedRequests />` line, inserted it twice instead — IIS's
+schema only allows one, so this broke config reads outright on the
+Management Point for the entire site. The agent caught this on its
+own, without me watching, and asked permission to fix it. Worth noting:
+nothing had gated the original risky edit, only the correction needed
+my sign-off — backwards, if you stop to think about it. I approved it;
+the fix was removing the duplicate line. Before, under
+`system.webServer/tracing`:
 
 ```xml
 <tracing>
@@ -180,18 +168,16 @@ After — back to IIS's own default, a single instance:
 ```
 
 With the duplicate removed, IIS could finally generate the trace
-messages needed to diagnose the 401 in the first place — the broken
-config had been silently preventing tracing from producing anything
-useful. Once tracing was finally working, it showed request after
-request completing authentication cleanly, confirming the
-handler-verb change from earlier was really the issue. Reverting the
-handler's verb list — `verb="*"`, ConfigMgr's own default, instead of
-the narrowed `verb="GET,HEAD"` it had been left with — cleared the
-401 immediately, and the actual application content finally made it
-through. That setting lives in `applicationHost.config` itself, in the
-`system.webServer/handlers` section scoped to the distribution
-point's virtual directories, `SMS_DP_SMSPKG$` and
-`CCMTOKENAUTH_SMS_DP_SMSPKG$`.
+messages needed to diagnose the 401 — the broken config had been
+silently preventing tracing from producing anything useful. Once
+working, it showed requests completing authentication cleanly,
+confirming the handler-verb change from earlier was the real issue.
+Reverting the verb list — `verb="*"`, ConfigMgr's own default, instead
+of the narrowed `verb="GET,HEAD"` it had been left with — cleared the
+401 immediately, and content finally made it through. That setting
+lives in `applicationHost.config`, in the `system.webServer/handlers`
+section scoped to the distribution point's virtual directories,
+`SMS_DP_SMSPKG$` and `CCMTOKENAUTH_SMS_DP_SMSPKG$`.
 
 **A quick side note on why this mattered so much:** every IIS request
 handler is registered against a list of allowed HTTP verbs — the
@@ -209,32 +195,27 @@ correctly.
 
 ## A detour worth explaining: Package instead of Application
 
-One more piece worth mentioning: after the agent declared victory —
+One more thing worth mentioning: after the agent declared victory —
 content distributed — I checked WKS01's Software Center myself and
-found nothing under installed applications. Went to MECM01's console
-to check deployments directly instead, and that's where I actually
-found it: the Yubico driver had been distributed as a legacy Package,
-not an Application, the way it had always been set up back when FS01
-was still the DP.
+found nothing installed. MECM01's console showed why: the Yubico
+driver had been distributed as a legacy Package, not an Application,
+the way it had always been set up back when FS01 was still the DP.
 
-I asked why. The answer traced back to earlier that same night, before
-FS01 troubleshooting had even wrapped up: the agent had seen a
-distribution manager log line reading *"the package is a content type
-package. There is nothing to be copied over."* ConfigMgr treats a
-modern Application and a legacy Package + Program as different content
-types internally, so the agent wanted to rule out whether content
-distribution was only broken for Applications, not Packages. The
-Yubico Application was deleted and rebuilt as a legacy Package +
-Program instead, under the standing wide-grant authorization to
-recreate the deployment if necessary.
+The answer traced back to earlier that same night, before FS01
+troubleshooting had even wrapped up: the agent had seen a distribution
+manager log line reading *"the package is a content type package.
+There is nothing to be copied over."* Since ConfigMgr treats a modern
+Application and a legacy Package + Program as different content types
+internally, the agent wanted to rule out whether distribution was only
+broken for Applications — so it deleted the Yubico Application and
+rebuilt it as a legacy Package + Program, under the standing wide-grant
+authorization to recreate the deployment if necessary.
 
-Same failure. Theory disproven — the issue had nothing to do with
-Application versus Package. By the time the real causes were found and
-fixed, the Package + Program version was already the object sitting
-there working, so it stayed that way. All four pilot machines run on
-that legacy package today, since that's what was already in place when
-I asked the agent to expand the pilot; converting it to a proper
-Application is still on the list, just not done yet.
+Same failure — theory disproven, the issue had nothing to do with
+Application versus Package. By the time the real causes were fixed, the
+Package + Program version was already sitting there working, so it
+stayed. All four pilot machines run on that legacy package today;
+converting it to a proper Application is still on the list.
 
 ## What finally worked
 
@@ -257,9 +238,8 @@ _Servers and Site System Roles: seven entries — FS01 gone from the console ent
 The following day's task was smaller: expanding the Yubico deployment
 to FS01, WSUS01, and DHCP01. None had the ConfigMgr client installed,
 and console client push was stopped by the session's safety
-guardrails to ask for my sign-off. Instead of going through with the
-console client push, I handed the agent a client-install PowerShell
-script of mine instead — now published as
+guardrails to ask for my sign-off. Instead, I handed the agent a
+client-install PowerShell script of mine — now published as
 [`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1)
 in my PowerShell toolkit repo. The script is built to discover the
 site code and management point via Active Directory publishing rather
