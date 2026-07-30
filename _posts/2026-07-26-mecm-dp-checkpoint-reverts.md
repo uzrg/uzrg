@@ -161,8 +161,8 @@ outright — on the Management Point for the entire ConfigMgr site. The
 agent caught this on its own, without me watching, and flagged it and
 requested permission to correct the config. Worth noting: nothing had
 gated the original risky edit, only the correction needed my sign-off
-— a surprising reality. I approved it, and the fix was removing the
-duplicate line. Before, under `system.webServer/tracing`:
+— backwards, if you stop to think about it. I approved it, and the fix
+was removing the duplicate line. Before, under `system.webServer/tracing`:
 
 ```xml
 <tracing>
