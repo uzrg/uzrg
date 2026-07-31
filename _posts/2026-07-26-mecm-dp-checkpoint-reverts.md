@@ -12,8 +12,8 @@ mermaid: false
 
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
-`0x80040154` COM registration error — five fix attempts, five failures,
-no root cause. Before bed that night I told the agent to keep going
+content-distribution error — the agent failed to fix it five times, no
+root cause found. Before bed that night I told the agent to keep going
 without me: try whatever it needed, including rebuilding the Yubico
 deployment from scratch, and report back in the morning. A wide grant
 on live infrastructure invites surprises. Two were bad enough to need a
