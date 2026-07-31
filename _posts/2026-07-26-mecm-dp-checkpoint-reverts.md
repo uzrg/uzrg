@@ -63,14 +63,14 @@ blocked, since the permission classifier treats disk formatting as
 destructive, even against a blank, never-used disk. Its way around it:
 `diskpart.exe`, which isn't gated the same way.
 
-Content relocation and the DP role on MECM01 came next, neither smooth
-at first. Needing a working distribution point *somewhere* that same
-night, the agent picked MECM02 — a live, healthy site server with
-nothing else running on it. Reasonable in the moment, wrong against the
-actual plan: MECM02 is earmarked as the **passive site server** for
-MECM01/MECM02 high availability, a role it's supposed to stay clean for
-until asked to fill it. Handing it distribution-point duty was scope
-creep into a box with a different job waiting.
+Content relocation and the DP role on MECM01 came next, and neither
+went smoothly — the agent was operating under that "whatever it
+needed" grant. Needing a working distribution point *somewhere* that
+night, it picked MECM02 — a live, healthy site server with nothing
+else running on it. Reasonable-sounding, but the wrong move: MECM02 is
+earmarked as the **passive site server** for MECM01/MECM02 high
+availability, a role it's supposed to stay clean for until asked to
+take over. Making it a distribution point was scope creep.
 
 I caught this the next time I checked in and asked — "why using
 MECM02, it was supposed to be passive HA!" — and the agent offered to
