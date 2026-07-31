@@ -23,15 +23,16 @@ the agent botched, then later caught on its own. The surprising part:
 fixing it required my approval, even though the botched edit that
 caused the issue never needed my sign-off.
 
-**Bottom line:** I'm pleased with how this ended. The Yubico Smart Card
-Minidriver deployed to the pilot machines once the content library and
-distribution point role were relocated to MECM01 for good — WKS01 that
-night, then FS01, WSUS01, and DHCP01 the following day. FS01 is back to
-being a clean file server. Getting there took two checkpoint reverts,
-one config mishap caught and fixed mid-session, one earlier
-misdiagnosis undone before anything else could work, and — the next
-day — an Active Directory publishing feature written off as broken too
-soon, plus a stopped Windows service that took too long to explain.
+**Bottom line:** I'm pleased with how this session concluded. The
+Yubico Smart Card Minidriver deployed to the pilot machines — WKS01
+first, once the content library and distribution point role were
+relocated to MECM01 for good, then the pilot expanded to FS01, WSUS01,
+and DHCP01. FS01 is back to being a clean file server. Getting there
+took two checkpoint reverts, one config-edit mishap caught and fixed
+mid-session — which had been silently blocking the trace messages
+needed to diagnose and resolve the real issue — and an Active Directory
+publishing feature written off as broken too soon, before realizing
+ConfigMgr just needed time to complete its AD-publish cycle.
 
 ## Mistake #1: picking MECM02 without checking what it was for
 
