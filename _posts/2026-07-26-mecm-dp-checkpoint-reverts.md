@@ -106,18 +106,17 @@ been.
 ## Pivoting to MECM01, and finding a real, fixable defect
 
 FS01 stayed broken, root cause still unidentified. Rather than let the
-agent keep reaching for one more FS01 theory, I stepped in directly:
-clean the MECM footprint off FS01 entirely, full focus on MECM01
-instead — not the first time MECM01 had been tried, more on that below.
-With fresh eyes, the agent found why content had never actually copied
-on that first attempt: MECM01's distribution point was still pointed at
-FS01's **shared UNC content library**, not a local drive — matching the
-original plan to centralize content on FS01, which had never actually
-worked, and which the agent's own earlier attempt had missed updating.
-This time, `Get-CMSite -SiteCode "MHL" | Move-CMContentLibrary
--NewLocation "E:\SCCMContentLib"` relocated the site's real content
-library onto a local drive on MECM01, and actual file content landed
-where it was supposed to.
+agent keep reaching for one more FS01 theory, I stepped in and asked it
+to clean the ConfigMgr footprint off FS01 entirely and focus on MECM01
+instead — not the first time MECM01 had been tried. The agent took
+another look and found why content had never actually copied on that
+first attempt: MECM01's distribution point was still pointed at FS01's
+**shared UNC content library**, not a local drive — from the original
+plan to centralize content on FS01, which had never worked. On the
+first attempt the agent missed that. This time, `Get-CMSite -SiteCode
+"MHL" | Move-CMContentLibrary -NewLocation "E:\SCCMContentLib"`
+relocated the site's real content library onto a local drive on
+MECM01, and actual file content landed where it was supposed to be.
 
 That fixed one issue, but a second appeared immediately: both MECM01
 and MECM02 started returning `401 Unauthorized` to every content
