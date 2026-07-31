@@ -72,11 +72,12 @@ earmarked as the **passive site server** for MECM01/MECM02 high
 availability, a role it's supposed to stay clean for until asked to
 take over. Making it a distribution point was scope creep.
 
-I caught this the next time I checked in and asked — "why using
-MECM02, it was supposed to be passive HA!" — and the agent offered to
-reverse it rather than patch it around. The fix was a Hyper-V
-checkpoint restore back to `agent-20260724-1458-Pre-DP-role-addition`,
-followed by cleanup that a VM snapshot doesn't reach:
+I caught this when I checked in the next morning and asked — "why
+using MECM02, it was supposed to be passive HA!" — and the agent
+offered to reverse it rather than patch it around. The fix was a
+Hyper-V checkpoint restore back to
+`agent-20260724-1458-Pre-DP-role-addition`, followed by a cleanup VM
+snapshots can't reach:
 
 ```
 Remove-CMDistributionPoint -SiteSystemServerName "MECM02.myhomelab.hv.lab" -SiteCode "MHL" -Force
