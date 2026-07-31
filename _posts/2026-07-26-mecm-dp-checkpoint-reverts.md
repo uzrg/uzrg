@@ -103,12 +103,6 @@ removed both features, rebooted — same `0x80040154` error. Theory
 disproven. Reverted the checkpoint to put FS01 back exactly as it had
 been.
 
-Two checkpoint reverts in one night, for two different reasons: one
-because the target was architecturally wrong, one because a reasonable
-diagnosis was simply incorrect. Neither is a failure of process —
-checkpoints existing and getting used exactly as intended *is* the
-process working.
-
 ## Pivoting to MECM01, and finding a real, fixable defect
 
 FS01 stayed broken, root cause still unidentified. Rather than let the
