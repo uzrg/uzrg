@@ -120,13 +120,13 @@ MECM01, and actual file content landed where it was supposed to be.
 
 That fixed one issue, but a second appeared immediately: both MECM01
 and MECM02 started returning `401 Unauthorized` to every content
-request — confirmed with both a real ConfigMgr client test and a
-manual one. Not an ordinary permissions problem: granting `Everyone:
-Full Control` recursively on the content library changed nothing.
-Something deeper in ConfigMgr's own content-serving stack was rejecting
-every request, regardless of who was asking — the culprit was a
-misconfigured ISAPI handler left over from hours earlier in the same
-session, the mistake that cost the most time of all, covered next.
+request — confirmed with a real ConfigMgr client test. It wasn't a
+permissions problem: granting `Everyone: Full Control` recursively on
+the content library changed nothing. Something deeper in ConfigMgr's
+content-serving stack was rejecting every request, regardless of who
+was asking — as we'll see next, the culprit was a misconfigured ISAPI
+handler left over from hours earlier, the mistake that cost the most
+time of all.
 
 ## Mistake #3: a fix from hours earlier turned out to be the actual culprit
 
