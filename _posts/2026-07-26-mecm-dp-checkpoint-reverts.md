@@ -49,11 +49,11 @@ request but never actually finishes serving the file. Confirmed: not a
 client problem, a missing-content problem — the same defect the last
 post already knew was sitting on FS01.
 
-It offered to keep chasing FS01's COM registration issue directly. I
-redirected it instead: relocate the content library onto a spare drive
-on MECM01 and add the distribution point role there — get *something*
-working rather than keep fighting the same wall. That's the wide grant
-I mentioned earlier taking its first real shape.
+The agent offered to keep chasing FS01's COM registration issue; I
+redirected it instead — relocate the content library onto a spare
+drive on MECM01 and add the distribution point role there, to get
+*something* working rather than keep fighting the same wall. That's
+the wide grant I mentioned earlier taking its first real shape.
 
 First snag: the agent couldn't find a second drive on MECM01 — as far
 as it could tell, there wasn't one. I told it plainly that the drive
