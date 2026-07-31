@@ -40,9 +40,14 @@ Early in the night, with FS01 still broken, I handed the agent a
 screenshot from WKS01: the Yubico app stuck at "Installing…," 0%
 complete, going nowhere. It started where it should have — the client's
 own CCM logs, not guesswork. `CAS.log` showed the same line repeating
-hourly: *"Download request only, ignoring location update."*
-Confirmed: not a client problem, a missing-content problem — the same
-defect the last post already knew was sitting on FS01.
+hourly: *"Download request only, ignoring location update."* That
+phrasing means the client had already resolved a valid DP and was
+simply re-issuing its download request against that same location —
+not bouncing between DPs, not re-resolving location, not throwing a
+client-side error. That's the signature of a DP that accepts the
+request but never actually finishes serving the file. Confirmed: not a
+client problem, a missing-content problem — the same defect the last
+post already knew was sitting on FS01.
 
 It offered to keep chasing FS01's COM registration issue directly. I
 redirected it instead: relocate the content library onto a spare drive
