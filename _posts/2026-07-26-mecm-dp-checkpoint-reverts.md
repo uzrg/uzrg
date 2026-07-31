@@ -40,7 +40,7 @@ Early in the night, with FS01 still broken, I handed the agent a
 screenshot from WKS01: the Yubico app stuck at "Installing…," 0%
 complete, going nowhere. It started where it should have — the client's
 own CCM logs, not guesswork. `CAS.log` showed the same line repeating
-on every retry: *"Download request only, ignoring location update."*
+hourly: *"Download request only, ignoring location update."*
 Confirmed: not a client problem, a missing-content problem — the same
 defect the last post already knew was sitting on FS01.
 
