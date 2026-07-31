@@ -13,15 +13,15 @@ mermaid: false
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
 content-distribution error — the agent failed to fix it five times, no
-root cause found. Before bed that night I told the agent to keep going
+root cause found. Before going to bed the following night, I told the agent to keep going
 without me: try whatever it needed, including rebuilding the Yubico
 deployment from scratch, and report back in the morning. A wide grant
-on live infrastructure invites surprises. Two were bad enough to need a
-full checkpoint revert — a restore to snapshot, in non-Hyper-V terms. A
-third wasn't a checkpoint revert at all: an IIS configuration edit the
-agent botched, then caught and diagnosed on its own. The surprising
-part: fixing it required my approval, even though the edit that caused
-the mistake never needed any.
+on live infrastructure invites surprises — two of them were bad enough
+to need a checkpoint revert, a restore to snapshot in non-Hyper-V
+terms. A third wasn't a checkpoint revert: an IIS configuration edit
+the agent botched, then later caught on its own. The surprising part:
+fixing it required my approval, even though the botched edit that
+caused the issue never needed my sign-off.
 
 **Bottom line:** I'm pleased with how this ended. The Yubico Smart Card
 Minidriver deployed to the pilot machines once the content library and
