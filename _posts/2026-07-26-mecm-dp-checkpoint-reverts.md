@@ -57,9 +57,9 @@ the wide grant I mentioned earlier taking its first real shape.
 
 First snag: the agent couldn't find a second drive on MECM01 — as far
 as it could tell, there wasn't one. I told it plainly that the drive
-existed, and it found it, offline. Bringing the disk online hit
-another guardrail: formatting it through PowerShell got blocked
-outright, since the permission classifier treats disk formatting as
+existed, offline. It took another look and found it, but bringing the
+disk online hit a guardrail: formatting it through PowerShell got
+blocked, since the permission classifier treats disk formatting as
 destructive, even against a blank, never-used disk. Its way around it:
 `diskpart.exe`, which isn't gated the same way.
 
