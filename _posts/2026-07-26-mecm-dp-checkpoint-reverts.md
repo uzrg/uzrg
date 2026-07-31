@@ -89,7 +89,7 @@ second pulls MECM02 out of the boundary group's site-system list.
 
 ## Mistake #2: an IIS legacy-compatibility theory that didn't pan out
 
-With MECM02 off the table, the agent took a second run at FS01, this
+With MECM02 off the table, the agent took another look at FS01, this
 time comparing its installed Windows Features against its own recall
 of a distribution point that had worked. FS01 had `Web-Metabase` and
 `Web-Mgmt-Compat` — legacy IIS 6 metabase compatibility — installed;
@@ -99,9 +99,9 @@ remove them, I approved.
 
 Checkpointed first
 (`agent-20260725-1557-Pre-remove-IIS6-Metabase-compat-DP-fix-attempt`),
-removed both features, rebooted. Same `0x80040154` error, immediately.
-Theory disproven. Reverted the checkpoint to put FS01 back exactly as
-it had been.
+removed both features, rebooted — same `0x80040154` error. Theory
+disproven. Reverted the checkpoint to put FS01 back exactly as it had
+been.
 
 Two checkpoint reverts in one night, for two different reasons: one
 because the target was architecturally wrong, one because a reasonable
