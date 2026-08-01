@@ -166,11 +166,11 @@ After — back to IIS's own default, a single instance:
 ```
 
 With the duplicate removed, IIS could finally generate the trace
-messages needed to diagnose the 401 — the broken config had been
+messages needed to diagnose the 401 error. The broken config had been
 silently preventing tracing from producing anything useful. Once
 working, it showed requests completing authentication cleanly,
-confirming the handler-verb change from earlier was the real issue.
-Reverting the verb list — `verb="*"`, ConfigMgr's own default, instead
+confirming the handler-verb change from earlier was the issue.
+Reverting the verb list — `verb="*"`, ConfigMgr's default, instead
 of the narrowed `verb="GET,HEAD"` it had been left with — cleared the
 401 immediately, and content finally made it through. That setting
 lives in `applicationHost.config`, in the `system.webServer/handlers`
