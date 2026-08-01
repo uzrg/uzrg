@@ -136,8 +136,9 @@ different symptom, an HTTP 405 tied to ConfigMgr's
 ISAPI extension. At the time, the "fix" was narrowing that handler's
 allowed verbs so WebDAV would take over a specific request type
 (`PROPFIND`) — backwards, since the ISAPI handler is supposed to
-handle that request itself. It traded one error (405) for another
-(401), and the 401 took hours to trace back to the same setting.
+handle that request itself. It traded one error (405 — Method Not Allowed) for another (401 —
+Unauthorized), and the 401 took hours to trace back to the same
+setting.
 
 Diagnosing it properly meant enabling IIS Failed Request Tracing. A
 scripted edit to `applicationHost.config`, meant to insert one
