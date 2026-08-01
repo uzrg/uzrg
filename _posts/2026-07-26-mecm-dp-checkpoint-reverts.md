@@ -281,10 +281,11 @@ _Deployment status: Success 4, Error 0, 100% compliance, WKS01, FS01, WSUS01, an
 - **The costliest mistake wasn't a VM problem, and no guess fixed it.**
   A config change made hours earlier, while troubleshooting a different
   problem, introduced a bug that was harder to find; any config change
-  deserves the same "will I need to undo this?" thinking. Every fix
-  tried before Failed Request Tracing was kind of a guess: the fix that
-  actually worked came from watching the trace logs, instead of
-  guessing at what might be wrong.
+  deserves the same "will I need to undo this?" thinking as something
+  covered by a checkpoint. Every fix tried before Failed Request
+  Tracing was a reasonable guess: the one that actually worked came
+  from watching the trace logs directly, instead of guessing at what
+  might be wrong.
 - **Permission requirements aren't symmetric.** Making the risky config
   edit needed no approval at all; fixing the mess it caused did.
 - **A guardrail on one tool doesn't block the underlying action.**
