@@ -208,11 +208,12 @@ broken for Applications — so it deleted the Yubico Application and
 rebuilt it as a legacy Package + Program, under the standing wide-grant
 authorization to recreate the deployment if necessary.
 
-Same failure — theory disproven, the issue had nothing to do with
-Application versus Package. By the time the real causes were fixed, the
-Package + Program version was already sitting there working, so it
-stayed. All four pilot machines run on that legacy package today;
-converting it to a proper Application is still on the list.
+The legacy Package led to the same failure — theory disproven, the
+issue had nothing to do with Application versus Package. By the time
+the real causes were fixed, the Package + Program version was already
+sitting there, so it stayed. All four pilot machines run on that legacy
+package today; converting it to a proper Application is now on the
+to-do list.
 
 ## What finally worked
 
