@@ -305,10 +305,10 @@ task here and there.
 
 ## What's next
 
-The pilot sits at four machines with a working deployment pipeline.
+The working pilot deployment pipeline now sits at four machines.
 Converting the Yubico package back into a proper Application and
 rolling it out to the rest of the lab is the obvious next step — along
-with seeing how the agent handles staggered maintenance windows across
-different deployment rings. Beyond that, MECM work pauses for now:
-next up is the RD Session-based farm, then Operations Manager, Azure
-DevOps, and eventually some Linux work.
+with seeing how the agent handles staggered maintenance windows to
+deploy patches across different deployment rings. Beyond that, MECM
+work will pause to turn to other things: the RD Session-based farm,
+then Operations Manager, Azure DevOps, and eventually some Linux work.
