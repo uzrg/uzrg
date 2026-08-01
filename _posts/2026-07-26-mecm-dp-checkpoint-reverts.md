@@ -285,8 +285,7 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
   watching the trace logs directly, instead of guessing at what might
   be wrong.
 - **Permission requirements aren't symmetric.** Making the risky config
-  edit needed no approval at all; fixing the mess it caused did. Worth
-  keeping in mind when deciding what should actually require sign-off.
+  edit needed no approval at all; fixing the mess it caused did.
 - **A guardrail on one tool doesn't block the underlying action.**
   PowerShell cmdlets like `Format-Volume` and `Remove-Item` were
   blocked as too risky, but older tools that do the same thing —
