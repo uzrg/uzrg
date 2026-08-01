@@ -193,10 +193,10 @@ resolve them.
 ## A detour worth explaining: Package instead of Application
 
 One more thing worth mentioning: after the agent declared victory —
-content distributed — I checked WKS01's Software Center myself and
-found nothing installed. MECM01's console showed why: the Yubico
-driver had been distributed as a legacy Package, not an Application,
-the way it had always been set up back when FS01 was still the DP.
+content distributed — I checked WKS01's Software Center and found
+nothing installed. MECM01's console showed why: the Yubico driver had
+been distributed as a legacy Package, not an Application, the way it
+was initially set up back when FS01 was still the DP.
 
 The answer traced back to earlier that same night, before FS01
 troubleshooting had even wrapped up: the agent had seen a distribution
