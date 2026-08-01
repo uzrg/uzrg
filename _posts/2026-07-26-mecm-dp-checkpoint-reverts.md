@@ -272,7 +272,7 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
   matter more, not less.** Serious mistakes made that night were fixed
   cleanly because a checkpoint existed at the right moment — not
   because the agent got everything right the first time.
-- **A VM snapshot only undoes changes on the VM itself.** Undoing
+- **A VM checkpoint only undoes changes on the VM guest.** Undoing
   MECM02's changes took two steps: restoring the checkpoint, and
   cleaning up MECM02's entry in the ConfigMgr site database. The two
   steps don't stay in sync automatically.
