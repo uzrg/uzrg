@@ -269,7 +269,7 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
 ## Lessons learned
 
 - **Letting the agent work unsupervised overnight means checkpoints
-  matter more, not less.** Both real mistakes that night were fixed
+  matter more, not less.** Serious mistakes made that night were fixed
   cleanly because a checkpoint existed at the right moment — not
   because the agent got everything right the first time.
 - **A VM snapshot only undoes changes on the VM itself.** Undoing
