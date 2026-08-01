@@ -245,8 +245,8 @@ than hardcoding them.
 
 The agent extended the schema and enabled publishing in Active
 Directory (both genuine prerequisites), but the objects didn't appear
-right away — it takes ConfigMgr some time to complete its AD-publishing
-cycle. That wasn't a show-stopper: the agent hardcoded the site code
+right away, as it takes ConfigMgr some time to complete its
+AD-publishing cycle. That wasn't a show-stopper: the agent hardcoded the site code
 and MP as a quick fix to keep the pilot moving. Checking again days
 later, both objects were fully populated in AD, and the script's since
 been reverted to real AD-based discovery.
