@@ -290,7 +290,7 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
   PowerShell cmdlets like `Format-Volume` and `Remove-Item` were
   blocked as too risky, but older tools that do the same thing —
   `diskpart.exe`, `cmd /c rmdir` — weren't covered by the same
-  restriction, and got used instead.
+  restriction.
 
 ## Division of labor
 
