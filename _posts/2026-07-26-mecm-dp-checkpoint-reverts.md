@@ -15,8 +15,9 @@ closed with FS01's distribution point broken by an unresolved
 content-distribution error — the agent failed to fix it five times, no
 root cause found. Before going to bed the following night, I told the agent to keep going
 without me: try whatever it needed, including rebuilding the Yubico
-deployment from scratch, and report back in the morning. A wide grant
-on live infrastructure invites surprises — two of them were bad enough
+deployment from scratch, and report back in the morning. Broad
+authorization on live infrastructure invites surprises — two of them
+were bad enough
 to need a checkpoint revert, a restore to snapshot in non-Hyper-V
 terms. A third wasn't a checkpoint revert: an IIS configuration edit
 the agent botched, then later caught on its own. The surprising part:
@@ -53,7 +54,8 @@ The agent offered to keep chasing FS01's COM registration issue; I
 redirected it instead — relocate the content library onto a spare
 drive on MECM01 and add the distribution point role there, to get
 *something* working rather than keep fighting the same wall. That's
-the wide grant I mentioned earlier taking its first real shape.
+the broad authorization I mentioned earlier taking its first real
+shape.
 
 First snag: the agent couldn't find a second drive on MECM01 — as far
 as it could tell, there wasn't one. I told it plainly that the drive
@@ -205,7 +207,7 @@ There is nothing to be copied over."* Since ConfigMgr treats a modern
 Application and a legacy Package + Program as different content types
 internally, the agent wanted to rule out whether distribution was only
 broken for Applications — so it deleted the Yubico Application and
-rebuilt it as a legacy Package + Program, under the standing wide-grant
+rebuilt it as a legacy Package + Program, under the standing broad
 authorization to recreate the deployment if necessary.
 
 The legacy Package led to the same failure — theory disproven, the
