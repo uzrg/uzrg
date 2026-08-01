@@ -246,10 +246,19 @@ than hardcoding them.
 The agent extended the schema and enabled publishing in Active
 Directory (both genuine prerequisites), but the objects didn't appear
 right away, as it takes ConfigMgr some time to complete its
-AD-publishing cycle. That wasn't a show-stopper: the agent hardcoded the site code
-and MP as a quick fix to keep the pilot moving. Checking again days
-later, both objects were fully populated in AD, and the script's since
-been reverted to real AD-based discovery.
+AD-publishing cycle. That wasn't a show-stopper — the agent hardcoded
+the site code and MP as a quick fix to keep the pilot moving.
+
+Checking AD again days later:
+
+```powershell
+$domainDN = (Get-ADDomain).DistinguishedName
+Get-ADObject -SearchBase "CN=System Management,CN=System,$domainDN" -Filter * |
+    Select-Object Name, ObjectClass, whenCreated
+```
+
+both objects were fully populated in AD, and I reverted the script to
+real AD-based discovery.
 
 Monitoring the deployment from the ConfigMgr console showed it
 succeeding across all four targets.
