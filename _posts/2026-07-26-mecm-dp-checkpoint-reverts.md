@@ -198,8 +198,8 @@ nothing installed. MECM01's console showed why: the Yubico driver had
 been distributed as a legacy Package, not an Application, the way it
 was initially set up back when FS01 was still the DP.
 
-The answer traced back to earlier that same night, before FS01
-troubleshooting had even wrapped up: the agent had seen a distribution
+The answer traced back to earlier, before FS01 troubleshooting had
+even wrapped up: the agent had seen a distribution
 manager log line reading *"the package is a content type package.
 There is nothing to be copied over."* Since ConfigMgr treats a modern
 Application and a legacy Package + Program as different content types
