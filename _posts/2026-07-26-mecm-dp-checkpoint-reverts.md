@@ -179,17 +179,16 @@ section scoped to the distribution point's virtual directories,
 
 **A quick side note on why this mattered so much:** every IIS request
 handler is registered against a list of allowed HTTP verbs — the
-request methods it will respond to, things like `GET`, `HEAD`, or
+request methods it will respond to — things like `GET`, `HEAD`, or
 `PROPFIND` (WebDAV's method for querying file and folder metadata).
-ConfigMgr's own content-serving handler needs `PROPFIND` in that list
+ConfigMgr's content-serving handler needs `PROPFIND` in that list
 because it's the only thing that knows how to translate a package's
 virtual URL — something like `/SMS_DP_SMSPKG$/mhl00006` — into the
 real, hash-addressed file sitting in the content library. Generic
 WebDAV has no way to do that translation; it only understands literal
 filesystem paths. Strip `PROPFIND` out of ConfigMgr's handler and
 those requests fall through to WebDAV instead, which can never
-resolve them — no matter what else on the site is configured
-correctly.
+resolve them.
 
 ## A detour worth explaining: Package instead of Application
 
