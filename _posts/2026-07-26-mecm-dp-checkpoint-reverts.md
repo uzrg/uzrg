@@ -12,11 +12,11 @@ mermaid: false
 
 The [last MECM post]({% post_url 2026-07-23-mecm-followup-fs01-distribution-point %})
 closed with FS01's distribution point broken by an unresolved
-content-distribution error — the agent failed to fix it five times, no
+content-distribution error: the agent failed to fix it five times, no
 root cause found. Before going to bed the following night, I told the agent to keep going
 without me: try whatever it needed, including rebuilding the Yubico
 deployment from scratch, and report back in the morning. Broad
-authorization on live infrastructure invites surprises — two of them
+authorization on live infrastructure invites surprises: two of them
 were bad enough
 to need a checkpoint revert, a restore to snapshot in non-Hyper-V
 terms. A third wasn't a checkpoint revert: an IIS configuration edit
@@ -30,8 +30,8 @@ first, once the content library and distribution point role were
 relocated to MECM01 for good, then the pilot expanded to FS01, WSUS01,
 and DHCP01. FS01 is back to being a clean file server. Getting there
 took two checkpoint reverts, one config-edit mishap caught and fixed
-mid-session — which had been silently blocking the trace messages
-needed to diagnose and resolve the real issue — and an Active Directory
+mid-session (which had been silently blocking the trace messages
+needed to diagnose and resolve the real issue), and an Active Directory
 publishing feature written off as broken too soon, before realizing
 ConfigMgr just needed time to complete its AD-publish cycle.
 
@@ -39,25 +39,25 @@ ConfigMgr just needed time to complete its AD-publish cycle.
 
 Early in the night, with FS01 still broken, I handed the agent a
 screenshot from WKS01: the Yubico app stuck at "Installing…," 0%
-complete, going nowhere. It started where it should have — the client's
+complete, going nowhere. It started where it should have: the client's
 own CCM logs, not guesswork. `CAS.log` showed the same line repeating
 hourly: *"Download request only, ignoring location update."* That
 phrasing means the client had already resolved a valid DP and was
-simply re-issuing its download request against that same location —
-not bouncing between DPs, not re-resolving location, not throwing a
+simply re-issuing its download request against that same location: not
+bouncing between DPs, not re-resolving location, not throwing a
 client-side error. That's the signature of a DP that accepts the
 request but never actually finishes serving the file. Confirmed: not a
-client problem, a missing-content problem — the same defect the last
+client problem, a missing-content problem, the same defect the last
 post already knew was sitting on FS01.
 
 The agent offered to keep chasing FS01's COM registration issue; I
-redirected it instead — relocate the content library onto a spare
+redirected it instead: relocate the content library onto a spare
 drive on MECM01 and add the distribution point role there, to get
 *something* working rather than keep fighting the same wall. That's
-the broad authorization I mentioned earlier taking its first real
+the broad authorization I mentioned earlier, taking its first real
 shape.
 
-First snag: the agent couldn't find a second drive on MECM01 — as far
+First snag: the agent couldn't find a second drive on MECM01, as far
 as it could tell, there wasn't one. I told it plainly that the drive
 existed, offline. It took another look and found it, but bringing the
 disk online hit a guardrail: formatting it through PowerShell got
@@ -66,9 +66,9 @@ destructive, even against a blank, never-used disk. Its way around it:
 `diskpart.exe`, which isn't gated the same way.
 
 Content relocation and the DP role on MECM01 came next, and neither
-went smoothly — the agent was operating under that "whatever it
+went smoothly: the agent was operating under that "whatever it
 needed" grant. Needing a working distribution point *somewhere* that
-night, it picked MECM02 — a live, healthy site server with nothing
+night, it picked MECM02, a live, healthy site server with nothing
 else running on it. Reasonable-sounding, but the wrong move: MECM02 is
 earmarked as the **passive site server** for MECM01/MECM02 high
 availability, a role it's supposed to stay clean for until asked to
@@ -94,14 +94,14 @@ second pulls MECM02 out of the boundary group's site-system list.
 With MECM02 off the table, the agent took another look at FS01, this
 time comparing its installed Windows Features against its own recall
 of a distribution point that had worked. FS01 had `Web-Metabase` and
-`Web-Mgmt-Compat` — legacy IIS 6 metabase compatibility — installed;
-its recollection was that the working comparison box didn't.
+`Web-Mgmt-Compat` (legacy IIS 6 metabase compatibility) installed; its
+recollection was that the working comparison box didn't.
 Plausible enough to test, so when the agent asked for permission to
 remove them, I approved.
 
 Checkpointed first
 (`agent-20260725-1557-Pre-remove-IIS6-Metabase-compat-DP-fix-attempt`),
-removed both features, rebooted — same `0x80040154` error. Theory
+removed both features, rebooted: same `0x80040154` error. Theory
 disproven. Reverted the checkpoint to put FS01 back exactly as it had
 been.
 
@@ -110,19 +110,19 @@ been.
 FS01 stayed broken, root cause still unidentified. Rather than let the
 agent keep reaching for one more FS01 theory, I stepped in and asked it
 to clean the ConfigMgr footprint off FS01 entirely and focus on MECM01
-instead — not the first time MECM01 had been tried. The agent took
+instead, not the first time MECM01 had been tried. The agent took
 another look and found why content had never actually copied on that
 first attempt: MECM01's distribution point was still pointed at FS01's
-**shared UNC content library**, not a local drive — from the original
-plan to centralize content on FS01, which had never worked. On the
-first attempt the agent missed that. This time, `Get-CMSite -SiteCode
+**shared UNC content library**, not a local drive, matching the
+original plan to centralize content on FS01, which had never worked.
+On the first attempt the agent missed that. This time, `Get-CMSite -SiteCode
 "MHL" | Move-CMContentLibrary -NewLocation "E:\SCCMContentLib"`
 relocated the site's real content library onto a local drive on
 MECM01, and actual file content landed where it was supposed to be.
 
 That fixed one issue, but a second appeared immediately: both MECM01
 and MECM02 started returning `401 Unauthorized` to every content
-request — confirmed with a real ConfigMgr client test. It wasn't a
+request, confirmed with a real ConfigMgr client test. It wasn't a
 permissions problem: granting `Everyone: Full Control` recursively on
 the content library changed nothing. Something deeper in ConfigMgr's
 content-serving stack was rejecting every request, regardless of who
@@ -137,14 +137,14 @@ agent's own post-mortem: earlier, it had been troubleshooting a
 different symptom, an HTTP 405 tied to ConfigMgr's
 ISAPI extension. At the time, the "fix" was narrowing that handler's
 allowed verbs so WebDAV would take over a specific request type
-(`PROPFIND`) — backwards, since the ISAPI handler is supposed to
-handle that request itself. It traded one error (405 — Method Not Allowed) for another (401 —
-Unauthorized), and the 401 took hours to trace back to the same
-setting.
+(`PROPFIND`), backwards, since the ISAPI handler is supposed to
+handle that request itself. It traded one error (405: Method Not
+Allowed) for another (401: Unauthorized), and the 401 took hours to
+trace back to the same setting.
 
 Diagnosing it properly meant enabling IIS Failed Request Tracing. A
 scripted edit to `applicationHost.config`, meant to insert one
-`<traceFailedRequests />` line, inserted it twice instead — IIS's
+`<traceFailedRequests />` line, inserted it twice instead; IIS's
 schema only allows one, so this broke config reads outright on the
 Management Point for the entire site. The agent caught this on its
 own, without me watching, and asked permission to fix it. Worth noting:
@@ -159,7 +159,7 @@ Before, under `system.webServer/tracing`:
 </tracing>
 ```
 
-After — back to IIS's own default, a single instance:
+After, back to IIS's own default, a single instance:
 
 ```xml
 <tracing>
@@ -172,20 +172,20 @@ messages needed to diagnose the 401 error. The broken config had been
 silently preventing tracing from producing anything useful. Once
 working, it showed requests completing authentication cleanly,
 confirming the handler-verb change from earlier was the issue.
-Reverting the verb list — `verb="*"`, ConfigMgr's default, instead
-of the narrowed `verb="GET,HEAD"` it had been left with — cleared the
-401 immediately, and content finally made it through. That setting
+Reverting the verb list (`verb="*"`, ConfigMgr's default, instead of
+the narrowed `verb="GET,HEAD"` it had been left with) cleared the 401
+immediately, and content finally made it through. That setting
 lives in `applicationHost.config`, in the `system.webServer/handlers`
 section scoped to the distribution point's virtual directories,
 `SMS_DP_SMSPKG$` and `CCMTOKENAUTH_SMS_DP_SMSPKG$`.
 
 **A quick side note on why this mattered so much:** every IIS request
-handler is registered against a list of allowed HTTP verbs — the
-request methods it will respond to — things like `GET`, `HEAD`, or
+handler is registered against a list of allowed HTTP verbs, the
+request methods it will respond to, things like `GET`, `HEAD`, or
 `PROPFIND` (WebDAV's method for querying file and folder metadata).
 ConfigMgr's content-serving handler needs `PROPFIND` in that list
 because it's the only thing that knows how to translate a package's
-virtual URL — something like `/SMS_DP_SMSPKG$/mhl00006` — into the
+virtual URL (something like `/SMS_DP_SMSPKG$/mhl00006`) into the
 real, hash-addressed file sitting in the content library. Generic
 WebDAV has no way to do that translation; it only understands literal
 filesystem paths. Strip `PROPFIND` out of ConfigMgr's handler and
@@ -194,8 +194,8 @@ resolve them.
 
 ## A detour worth explaining: Package instead of Application
 
-One more thing worth mentioning: after the agent declared victory —
-content distributed — I checked WKS01's Software Center and found
+One more thing worth mentioning: after the agent declared victory
+(content distributed), I checked WKS01's Software Center and found
 nothing installed. MECM01's console showed why: the Yubico driver had
 been distributed as a legacy Package, not an Application, the way it
 was initially set up back when FS01 was still the DP.
@@ -206,11 +206,11 @@ manager log line reading *"the package is a content type package.
 There is nothing to be copied over."* Since ConfigMgr treats a modern
 Application and a legacy Package + Program as different content types
 internally, the agent wanted to rule out whether distribution was only
-broken for Applications — so it deleted the Yubico Application and
+broken for Applications, so it deleted the Yubico Application and
 rebuilt it as a legacy Package + Program, under the standing broad
 authorization to recreate the deployment if necessary.
 
-The legacy Package led to the same failure — theory disproven, the
+The legacy Package led to the same failure: theory disproven, the
 issue had nothing to do with Application versus Package. By the time
 the real causes were fixed, the Package + Program version was already
 sitting there, so it stayed. All four pilot machines run on that legacy
@@ -224,14 +224,14 @@ to-do list.
 - The ISAPI handler's verb list reverted to ConfigMgr's default.
 - FS01 fully cleaned up: distribution point role removed, boundary
   group membership pulled, its leftover site-system registration gone
-  from the console entirely. Back to exactly its intended role — SQL
+  from the console entirely. Back to exactly its intended role, SQL
   Always On backups and the cluster file-share witness.
 - MECM02 fully reverted to its clean, untouched, pre-DP-work state.
 - The Yubico Smart Card Minidriver installed on WKS01 through the real
   deployment pipeline.
 
 <img src="{{ '/assets/img/gallery/mecm-site-system-roles-no-fs01.png' | relative_url }}" alt="Servers and Site System Roles list in the ConfigMgr console showing seven servers with no FS01 entry">
-_Servers and Site System Roles: seven entries — FS01 gone from the console entirely, not just stripped of its distribution point role._
+_Servers and Site System Roles: seven entries, FS01 gone from the console entirely, not just stripped of its distribution point role._
 
 ## The next day: expanding the pilot
 
@@ -239,7 +239,7 @@ The following day's task was smaller: expanding the Yubico deployment
 to FS01, WSUS01, and DHCP01. None had the ConfigMgr client installed,
 and console client push was stopped by the session's safety
 guardrails to ask for my sign-off. Instead, I handed the agent a
-client-install PowerShell script of mine — now published as
+client-install PowerShell script of mine, now published as
 [`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1)
 in my PowerShell toolkit repo. The script is built to discover the
 site code and management point via Active Directory publishing rather
@@ -248,7 +248,7 @@ than hardcoding them.
 The agent extended the schema and enabled publishing in Active
 Directory (both genuine prerequisites), but the objects didn't appear
 right away, as it takes ConfigMgr some time to complete its
-AD-publishing cycle. That wasn't a show-stopper — the agent hardcoded
+AD-publishing cycle. That wasn't a show-stopper: the agent hardcoded
 the site code and MP as a quick fix to keep the pilot moving.
 
 Checking AD again days later:
@@ -266,13 +266,13 @@ Monitoring the deployment from the ConfigMgr console showed it
 succeeding across all four targets.
 
 <img src="{{ '/assets/img/gallery/mecm-yubico-package-deployment-success.png' | relative_url }}" alt="ConfigMgr Deployments view showing the Yubico Smart Card Minidriver Silent Install deployment at 100 percent compliance across 4 assets, 0 errors">
-_Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01, and DHCP01 all accounted for._
+_Deployment status: Success 4, Error 0, 100% compliance, WKS01, FS01, WSUS01, and DHCP01 all accounted for._
 
 ## Lessons learned
 
 - **Letting the agent work unsupervised overnight means checkpoints
   matter more, not less.** Serious mistakes made that night were fixed
-  cleanly because a checkpoint existed at the right moment — not
+  cleanly because a checkpoint existed at the right moment, not
   because the agent got everything right the first time.
 - **A VM checkpoint only undoes changes on the VM guest.** Undoing
   MECM02's changes took two steps: restoring the checkpoint, and
@@ -283,15 +283,15 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
   problem, introduced a bug that was harder to find; any config change
   deserves the same "will I need to undo this?" thinking as something
   covered by a checkpoint. Every fix tried before Failed Request Tracing
-  was a reasonable guess — the one that actually worked came from
+  was a reasonable guess: the one that actually worked came from
   watching the trace logs directly, instead of guessing at what might
   be wrong.
 - **Permission requirements aren't symmetric.** Making the risky config
   edit needed no approval at all; fixing the mess it caused did.
 - **A guardrail on one tool doesn't block the underlying action.**
   PowerShell cmdlets like `Format-Volume` and `Remove-Item` were
-  blocked as too risky, but older tools that do the same thing —
-  `diskpart.exe`, `cmd /c rmdir` — weren't covered by the same
+  blocked as too risky, but older tools that do the same thing
+  (`diskpart.exe`, `cmd /c rmdir`) weren't covered by the same
   restriction.
 
 ## Division of labor
@@ -309,7 +309,7 @@ task here and there.
 
 The working pilot deployment pipeline now sits at four machines.
 Converting the Yubico package back into a proper Application and
-rolling it out to the rest of the lab is the obvious next step — along
+rolling it out to the rest of the lab is the obvious next step, along
 with seeing how the agent handles staggered maintenance windows to
 deploy patches across different deployment rings. Beyond that, MECM
 work will pause to turn to other things: the RD Session-based farm,
