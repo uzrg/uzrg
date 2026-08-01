@@ -276,15 +276,14 @@ _Deployment status: Success 4, Error 0, 100% compliance — WKS01, FS01, WSUS01,
   MECM02's changes took two steps: restoring the checkpoint, and
   cleaning up MECM02's entry in the ConfigMgr site database. The two
   steps don't stay in sync automatically.
-- **The costliest mistake wasn't a VM problem, and no guess fixed it —
-  only a confirmed cause did.** A config change made hours earlier, for
-  a different problem, made a real bug much harder to find later; any
-  config change deserves the same "will I need to undo this?" thinking
-  as something covered by a checkpoint, it just doesn't come with an
-  automatic undo button. Every fix tried before Failed Request Tracing
-  was a reasonable idea that turned out wrong — the fix that actually
-  worked came from watching the real requests directly, instead of
-  guessing at what else might be wrong.
+- **The costliest mistake wasn't a VM problem, and no guess fixed it.**
+  A config change made hours earlier, while troubleshooting a different
+  problem, introduced a bug that was harder to find; any config change
+  deserves the same "will I need to undo this?" thinking as something
+  covered by a checkpoint. Every fix tried before Failed Request Tracing
+  was a reasonable guess — the one that actually worked came from
+  watching the trace logs directly, instead of guessing at what might
+  be wrong.
 - **Permission requirements aren't symmetric.** Making the risky config
   edit needed no approval at all; fixing the mess it caused did. Worth
   keeping in mind when deciding what should actually require sign-off.
