@@ -133,10 +133,10 @@ time of all.
 This is the one that most likely caused all the trouble. Per the
 agent's own post-mortem: earlier that same night, it had been
 troubleshooting a different symptom, an HTTP 405 tied to ConfigMgr's
-own ISAPI extension. The "fix" at the time was narrowing that handler's
+ISAPI extension. At the time, the "fix" was narrowing that handler's
 allowed verbs so WebDAV would take over a specific request type
-(`PROPFIND`) instead — backwards, since the ISAPI handler is supposed
-to handle that request itself. It traded one error (405) for another
+(`PROPFIND`) — backwards, since the ISAPI handler is supposed to
+handle that request itself. It traded one error (405) for another
 (401), and the 401 took hours to trace back to the same setting.
 
 Diagnosing it properly meant enabling IIS Failed Request Tracing. A
@@ -146,9 +146,8 @@ schema only allows one, so this broke config reads outright on the
 Management Point for the entire site. The agent caught this on its
 own, without me watching, and asked permission to fix it. Worth noting:
 nothing had gated the original risky edit, only the correction needed
-my sign-off — backwards, if you stop to think about it. I approved it;
-the fix was removing the duplicate line. Before, under
-`system.webServer/tracing`:
+my sign-off. I approved it: the fix was removing the duplicate line.
+Before, under `system.webServer/tracing`:
 
 ```xml
 <tracing>
