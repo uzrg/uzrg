@@ -131,8 +131,8 @@ time of all.
 ## Mistake #3: a fix from hours earlier turned out to be the actual culprit
 
 This is the one that most likely caused all the trouble. Per the
-agent's own post-mortem: earlier that same night, it had been
-troubleshooting a different symptom, an HTTP 405 tied to ConfigMgr's
+agent's own post-mortem: earlier, it had been troubleshooting a
+different symptom, an HTTP 405 tied to ConfigMgr's
 ISAPI extension. At the time, the "fix" was narrowing that handler's
 allowed verbs so WebDAV would take over a specific request type
 (`PROPFIND`) — backwards, since the ISAPI handler is supposed to
