@@ -10,97 +10,73 @@ mermaid: false
 
 # Finishing what the last post promised
 
-The [last MECM post]({% post_url 2026-07-26-mecm-dp-checkpoint-reverts %}) ended
-with the Yubico Smart Card Minidriver running as a legacy Package + Program on
-four pilot machines, and a to-do item: convert it to a proper Application and
-roll it out lab-wide. That's this post. I asked the agent to do the
-conversion, deploy it to every domain-joined machine, and treat the domain
-controllers differently from everything else: **Available** there, so it
-shows up in Software Center without forcing an install, **Required**
+The [last MECM post]({% post_url 2026-07-26-mecm-dp-checkpoint-reverts %}) left
+the Yubico Smart Card Minidriver running as a legacy Package on four pilot
+machines. This closes that out: convert it to a proper Application, then
+deploy it lab-wide. It's Available on the domain controllers and Required
 everywhere else.
 
-**Bottom line:** the Application conversion itself was the easy part. The
-rollout surfaced two real problems, neither of them where I expected: a
-handful of AD computer objects that turned out to be reservations, not actual
-domain members, and a collection that had been staged for this exact rollout
-months ago with the wrong scope, silently capping its membership at one
-machine no matter how many were added to it. Both got found and fixed. Every
-in-scope machine now runs the Application, the domain controllers show it as
-available and nothing else, and the legacy Package is retired.
+**Bottom line:** the conversion itself was trivial. The rollout wasn't. Two
+issues surfaced, neither where expected: three AD computer objects that
+looked like domain members but were pre-staged reservations, and the
+"DEP - Production - Yubico Minidriver" collection silently capped at one
+machine by a bad limiting-collection scope. Both are fixed now and every
+in-scope machine runs the Application; the legacy Package is retired.
 
 ## Converting the Package
 
-The legacy Package (`MHL00006`) had one program, `Silent Install`, running
-`msiexec /i YubiKey-Minidriver-5.0.4.273-x64.msi /quiet /norestart` against
-content sitting at `\\FS01.myhomelab.hv.lab\MECMSource\YubicoMinidriver\`.
-Building the real Application meant knowing the MSI's product code for the
-detection rule, which the package definition doesn't carry. The agent pulled
-it directly from the MSI using the `WindowsInstaller.Installer` COM object
-against the `Property` table rather than guessing or installing it somewhere
-first to check:
+The legacy Package (`MHL00006`) ran
+`msiexec /i YubiKey-Minidriver-5.0.4.273-x64.msi /quiet /norestart` from
+`\\FS01\MECMSource\YubicoMinidriver\`. The Application needed the MSI's
+product code for its detection rule, pulled directly from the MSI's
+`Property` table rather than guessed:
 
 ```powershell
+# Point this at your own MSI - path below is this lab's source share, not a general default
+$msiPath = "\\FS01.myhomelab.hv.lab\MECMSource\YubicoMinidriver\YubiKey-Minidriver-5.0.4.273-x64.msi"
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $db = $installer.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $installer, @($msiPath, 0))
 $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db,
     @("SELECT Property, Value FROM Property WHERE Property = 'ProductCode'"))
+$view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+$record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+$productCode = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 2)
+$productCode
 ```
 
-That returned `{A8C8D1E1-3BB1-470D-BBD8-3AE20FB0FD85}`. With the product code
-in hand, the new Application ("Yubico Smart Card Minidriver") got one MSI
-deployment type: same install command as the old program, an uninstall
-command built from the product code, detection by MSI product code, and
-"install for system" behavior since this is a driver, not a per-user app.
-Content pointed at the same FS01 source share as before: relocating the
-distribution point's content library off FS01 during the last post's saga
-didn't touch this path, since a package's source location and the site's
-content library are two different things. Content distributed to MECM01
-cleanly, and the legacy Package's deployment got retired once the new
-Application deployment was live on the same collection, so nothing would be
-targeted twice.
+Product code: `{A8C8D1E1-3BB1-470D-BBD8-3AE20FB0FD85}`. One MSI deployment
+type, same install/uninstall commands, MSI-product-code detection,
+install-for-system. Content stayed on the same FS01 source; the earlier
+content-library relocation never touched this path. Distributed cleanly to
+MECM01; the legacy Package's deployment was retired once the Application went
+live on the same collection.
 
-## Deciding who counts as "domain-joined"
+## Scoping "domain-joined" correctly
 
-Before deploying anywhere, the agent surveyed every computer object in AD
-against Hyper-V's actual running state. A few were easy exclusions: VMM01
-stays off-limits under a standing instruction, and five RD-role VMs
-(broker, gateway, licensing, two session hosts) are intentionally off with
-Phase 3 not yet started, so I told the agent to leave them for that phase
-rather than boot them just for this.
+Before deploying, every AD computer object was audited against Hyper-V's
+actual running state. Easy exclusions: VMM01 (standing hold), and the five
+RD-role VMs (Phase 3 hasn't started; left off rather than booted just for
+this).
 
-Three more looked like real targets on paper, NPS01, DEVOPS01, and OPSMGR01,
-each with a proper AD computer object in the right OU. But ConfigMgr's AD
-System Discovery had already rejected all three with the same error:
-"unsupported operating system, unsupported version, or malformed AD entry."
-The agent checked why: each object's `operatingSystem` and `dNSHostName`
-attributes were blank, and `lastLogonTimestamp` was still the epoch value,
-`pwdLastSet` unchanged since the object was created back in April. Compared
-against a real domain member like WSUS01, whose password rotates and whose
-last logon is recent, the difference was clear: these three are reservations,
-computer accounts pre-staged for future build phases, not machines that have
-ever actually joined the domain. One of them, when reached directly, even
-reported its live hostname as `WIN-QI4D62II366`, the Windows default, never
-renamed. All three are correctly out of scope for "deploy to every
-domain-joined machine" precisely because they aren't domain-joined yet.
+Three more looked like real targets (NPS01, DEVOPS01, OPSMGR01), each with a
+proper AD object in the right OU. ConfigMgr's AD System Discovery had already
+rejected all three. Cause: blank `operatingSystem`/`dNSHostName`,
+`lastLogonTimestamp` still epoch, `pwdLastSet` unchanged since object
+creation; one even still answered to `WIN-QI4D62II366`. These are pre-staged
+reservations, not domain members, and out of scope, thus nine real targets
+for Required (DHCP01, FS01, WSUS01, WKS01, MECM01, MECM02, SQL01-03) and
+DC01/DC02 for Available.
 
-That left nine real, running, actually-joined targets for the Required
-deployment (DHCP01, FS01, WSUS01, WKS01, MECM01, MECM02, and all three SQL
-Always On nodes) plus DC01 and DC02 for the Available one.
+## Rolling out the client
 
-## Rolling out the client, one node at a time
+Four of nine already had the client. The rest, plus both DCs, got it via
+[`configmgr/Install-SCCMClient.ps1`](https://github.com/uzrg/powershell-toolkit/blob/main/configmgr/Install-SCCMClient.ps1),
+which resolves site code and management point from AD's System Management
+container instead of hardcoding either.
 
-Four of the nine already had the ConfigMgr client from the earlier pilot.
-The other five, plus both domain controllers, didn't, so the agent used my
-`Install-SCCMClient.ps1` script from the PowerShell toolkit repo, which
-discovers the site code and management point from AD's published System
-Management container instead of hardcoding either.
-
-The SQL Always On nodes and the two domain controllers both carry standing
-guardrails against touching more than one at a time, so the agent kept to
-that everywhere it applied: checkpoint the guest, install the client, verify
-health, move to the next. For the AG, that meant secondaries first
-(SQL02, SQL03) and the primary (SQL01) last, checking replica sync health
-before and after each one:
+Standard guardrails applied on every protected tier: checkpoint, install,
+verify, next, one node at a time. SQL AG: secondaries first (SQL02, SQL03),
+primary last (SQL01), sync health checked before and after each:
 
 ```sql
 SELECT ar.replica_server_name, ars.role_desc, ars.synchronization_health_desc
@@ -108,123 +84,86 @@ FROM sys.dm_hadr_availability_replica_states ars
 JOIN sys.availability_replicas ar ON ars.replica_id = ar.replica_id
 ```
 
-All three stayed `HEALTHY` throughout. Same pattern for the domain
-controllers: `repadmin /replsummary` and `dcdiag /q` clean before touching
-DC01, clean again after, then DC02, same checks again. Replication stayed at
-zero failures the whole way.
+All three stayed `HEALTHY` throughout. Same discipline applied to the DCs:
+`repadmin /replsummary` and `dcdiag /q` clean before and after each, with
+zero replication failures.
 
-The domain controllers came with one extra wrinkle worth recording: the
-session's permission layer flatly refused the DC01 client-install command
-twice in a row, no error beyond a generic denial, even though the identical
-command had gone through fine on every SQL node and both MECM servers
-moments earlier. It took an explicit go-ahead from me, specifically for the
-domain controllers, before the same command ran without complaint. I don't
-know whether that's a deliberate extra gate on domain controllers
-specifically or something less consistent, but it's a data point for how
-this permission layer behaves under load.
+## Chasing a deployment that showed no progress
 
-## The deployment that wouldn't show progress
+Client installed everywhere, both deployments live, but nothing happened!
+`Get-CMApplicationDeploymentStatus` showed one machine reporting out of
+eleven, and a console-triggered policy refresh didn't help. `PolicyAgent.log`
+on SQL01 gave the real answer: *"No new assignments for Machine SQL01."*
 
-With the client installed everywhere and both deployments live, nothing
-happened. `Get-CMApplicationDeploymentStatus` kept returning almost nothing,
-one machine reporting, out of eleven targeted. Triggering a machine policy
-refresh from the console didn't help. The agent went to the client logs
-directly to see what was actually going on, and `PolicyAgent.log` on SQL01
-had the real answer: *"No new assignments for Machine SQL01,"* twice, even
-right after a manual policy retrieval.
+That pointed at the collection, not the client. `SMS_FullCollectionMembership`,
+queried directly over WMI, showed one actual member, WKS01, despite nine
+direct membership rules. Root cause: the collection's limiting collection was
+scoped to "OP - All Workstations," which excludes servers entirely. A
+collection can never contain anything outside its limiting collection, so
+every server target was silently dropped. The collection had sat empty since
+being staged for a rollout that never shipped.
 
-That pointed at the collection, not the client. Querying the ground truth
-(`SMS_FullCollectionMembership` over WMI, not the cached PowerShell object)
-showed only one actual member of "DEP - Production - Yubico Minidriver":
-WKS01. Nine direct membership rules existed for the collection, confirmed
-present, but only one had actually resolved. The cause turned out to be the
-collection's limiting collection: it had been scoped to "OP - All
-Workstations," a query-based collection matching non-server operating
-systems only. A ConfigMgr collection can never contain a resource that isn't
-also a member of its limiting collection, no matter what direct rules are
-added to it, so every server target was being silently excluded regardless
-of anything done to the collection itself. This collection had been created
-and left empty well before this rollout, apparently scoped for a
-workstation-only rollout that never happened, and nobody had hit the bug
-before because nobody had tried to put a server into it.
-
-The fix was a one-line collection property change, followed by a forced
-re-evaluation:
+The actual fix is one collection property change plus a forced
+re-evaluation, once the session is connected to the site:
 
 ```powershell
+# Set-CMDeviceCollection and Invoke-CMCollectionUpdate only exist once the
+# ConfigurationManager module is loaded and you're sitting in the site's
+# PSDrive - swap MHL / MECM01 below for your own site code and site server
+Import-Module "$($env:SMS_ADMIN_UI_PATH)\..\ConfigurationManager.psd1"
+if (-not (Get-PSDrive -Name MHL -PSProvider CMSite -ErrorAction SilentlyContinue)) {
+    New-PSDrive -Name MHL -PSProvider CMSite -Root MECM01.myhomelab.hv.lab -Description "MECM Site" | Out-Null
+}
+Set-Location "MHL:\"
+
 Set-CMDeviceCollection -Name "DEP - Production - Yubico Minidriver" -LimitingCollectionName "All Systems"
 Invoke-CMCollectionUpdate -Name "DEP - Production - Yubico Minidriver"
 ```
 
-All nine members resolved within seconds of that running. Triggering the
-machine policy and application deployment evaluation cycles directly on each
-client, over WMI rather than through the console's push notification (which
-still hadn't landed reliably), got every machine evaluating within the
-minute. SQL01 went from "no new assignments" to a completed, verified
-install in under thirty seconds once it actually had the policy.
+All nine members resolved within seconds. Triggering the policy and
+evaluation cycles directly on each client (the console's push notification
+still wasn't reliable) closed the loop in under a minute; SQL01 went from
+"no new assignments" to a verified install in thirty seconds.
 
-## Confirming it actually worked
+## Verifying the result
 
-Console-level deployment status stayed unreliable for a while longer: it's
-driven by the site's periodic status summarizer, not by anything the client
-does in real time, so it lagged well behind what was actually happening on
-each box. The real answer was in each client's own `AppDiscovery.log` and
-`AppEnforce.log`. One machine, MECM01 itself, appeared to have no activity at
-all until the agent realized the site server logs its own client components
-to `C:\Program Files\SMS_CCM\Logs` instead of the usual
-`C:\Windows\CCM\Logs` that every other client uses. Once pointed at the
-right folder, MECM01's install showed the same clean success as everywhere
-else.
+Console-level status stayed unreliable: it's driven by the site's periodic
+status summarizer, not real-time client state. The real signal was each
+client's own `AppDiscovery.log` and `AppEnforce.log`; MECM01 logs its own
+components to `C:\Program Files\SMS_CCM\Logs` instead of the usual
+`C:\Windows\CCM\Logs`, worth knowing before assuming a machine shows no
+activity.
 
-Final result, confirmed machine by machine rather than trusted from a
-summary screen: all nine Required targets show a successful install or a
-clean compliant detection, and both domain controllers correctly detect the
-Application as not installed without ConfigMgr forcing it on them, exactly
-the Available behavior asked for.
+Final state, confirmed machine by machine: all nine Required targets show a
+successful install or clean compliant detection, and both DCs correctly show
+the Application as not installed, exactly the Available behavior specified.
 
 ## Lessons learned
 
-- **A collection's limiting collection is a silent ceiling on membership.**
-  Direct membership rules only matter for resources that already belong to
-  the limiting collection; anything outside it can never be added, no error,
-  no warning, just membership that never resolves.
-- **Aggregate deployment status lags reality by design.** The console and
-  API views depend on the site's periodic status summarizer, not on the
-  client. When something needs to be verified right now, the client's own
-  `AppDiscovery.log` and `AppEnforce.log` are the actual source of truth.
+- **A limiting collection is a hard ceiling, not a suggestion.** Direct
+  membership rules only resolve for resources already inside the limiting
+  collection: no error, no warning, just membership that silently never
+  happens. Check the limiting collection first when a device won't join.
+- **Aggregate deployment status lags reality.** The console and API views
+  depend on the site's status summarizer cycle. For real-time truth, go to
+  the client's own `AppDiscovery.log`/`AppEnforce.log`.
 - **A pre-staged AD computer object isn't proof of domain membership.**
-  `lastLogonTimestamp` and `pwdLastSet` tell the difference between a
-  machine that's actually joined and one that's just been reserved in AD
-  ahead of a future build phase.
-- **Push notifications aren't guaranteed delivery.** Triggering a policy or
-  evaluation cycle from the console didn't reliably reach clients in this
-  environment; triggering the same schedule locally on each client did,
-  every time.
-- **The permission layer doesn't always behave consistently for
-  the same command.** The identical client-install command was refused
-  twice on the domain controllers and had gone through cleanly on every
-  other machine moments before; a one-line collection property change was
-  refused once and then allowed on an identical retry. Worth remembering
-  that a denial isn't always a signal something is actually wrong with the
-  command.
+  Check `lastLogonTimestamp` and `pwdLastSet` before trusting an OU
+  placement.
+- **Don't rely on push notifications for delivery.** Trigger the policy or
+  evaluation cycle locally on the client when timing matters.
 
 ## Division of labor
 
-The agent: the product-code extraction, the Application and deployment type
-build, content distribution, the domain-joined survey that excluded NPS01,
-DEVOPS01, and OPSMGR01, every checkpointed client install with health checks
-before and after, finding and fixing the collection scoping bug, verifying
-the final state machine by machine, and the first draft of this post. Me:
-the Available-versus-Required split for domain controllers, the call to skip
-the powered-off RD-role VMs, supplying the client-install script, and the
-explicit go-ahead for touching the domain controllers once the permission
+The agent: the Application build, content distribution, the domain-joined
+audit, every checkpointed install, and root-causing the collection bug.
+Me: the Available-versus-Required split, skipping the powered-off RD-role
+VMs, and authorizing the domain-controller installs once the permission
 layer balked.
 
 ## What's next
 
-NPS01, DEVOPS01, and OPSMGR01 will pick up this Application automatically
-once each is actually built and joined in its own phase; the production
-collection doesn't need to change for that to happen. The RD-role VMs get
-the same treatment once Phase 3 starts them for real. Beyond that, the
-roadmap holds: the RD Session-based farm next, then Operations Manager,
-Azure DevOps, and eventually some Linux work.
+NPS01, DEVOPS01, and OPSMGR01 pick up this Application automatically once
+each is built and joined; no collection change needed. The RD-role VMs get
+it when Phase 3 starts. Next: the RD session-based farm, then Operations
+Manager, Azure DevOps, and Linux.
