@@ -8,74 +8,67 @@ pin: false
 mermaid: false
 ---
 
-# A WSUS sync failure that turned into three separate fixes
+# One WSUS sync failure, three fixes
 
-WSUS01 had been sitting there failing every sync attempt with an error that
-looked like a DNS problem but wasn't. I asked the agent to get it syncing,
-then build real patch management on top of it, then optimize its disk
-footprint. Each of those three asks turned up something underneath it that
-wasn't part of the original ask at all: a dead IPv6 gateway affecting the
-whole lab, a 37 GB SQL transaction log that could never shrink, and a SQL
-Agent service that had never been running on any of the three Always On
-nodes.
+WSUS01 had been failing every sync attempt with an error that looked like a
+DNS problem, but as it turned out, it was not DNS at all. Getting WSUS to
+sync was the first priority, then real patch management, followed by
+trimming its disk footprint. While solving those three, the work also
+uncovered a dead IPv6 gateway affecting the whole lab, a 37 GB SQL
+transaction log that could never shrink, and a SQL Agent service that had
+never run on any of the three Always On nodes.
 
-**Bottom line:** WSUS syncs cleanly now, scoped to only the three products
-actually running in the lab. Every domain-joined machine has a real patch
-path through MECM, built as nine staggered rings so the domain controllers
-and the SQL AG nodes are never mid-patch at the same time, with the guarded
-tier requiring an explicit monthly go-ahead rather than running unattended.
-And the SQL AG, which had been running since mid-July with zero working
-backup jobs, now has one.
+**Bottom line:** WSUS syncs now, scoped to the three products actually
+running in this lab (`Windows Server, version 1903 and later`, `Windows
+11`, and `Microsoft SQL Server 2022`). Every domain-joined machine has a
+real patch path through MECM, built as nine staggered rings so the domain
+controllers and SQL AG nodes are never patched at the same time; the
+guarded tier needs an explicit monthly go-ahead rather than running
+unattended. And the SQL AG, which has been running with zero working
+backup jobs, finally has one.
 
 ## The error that wasn't about DNS
 
-The failure was a `WebException: The remote name could not be resolved` for
-`sws.update.microsoft.com`, thrown from deep inside the WSUS sync client's
-authentication call. Every manual check the agent ran said the opposite:
-`nslookup` resolved the name fine, `Test-NetConnection` connected on 443
-without issue, WinHTTP proxy was set to direct access. Sync history showed a
-mix of failure modes across attempts, not just the DNS one, including a
-plain connection timeout to a completely different IP for the same
-hostname, which is what pointed the investigation away from DNS and toward
-routing.
+The failure surfaced as a `WebException: The remote name could not be
+resolved` for `sws.update.microsoft.com`, thrown from the sync client's
+authentication call, even though `nslookup` and `Test-NetConnection`
+both returned clean results. Sync history told a fuller story: several
+failure modes appeared, not just DNS, including one timeout to a
+completely different IP for the same hostname. That pattern pointed
+toward a routing problem, not a DNS one.
 
-pfSense's gateway status confirmed it: `WAN_DHCP6`, the IPv6 WAN gateway,
-was down with 100% loss, while the IPv4 WAN was perfectly healthy. WSUS01
-still had IPv6 enabled, and Microsoft's sync endpoint resolves an AAAA
-record over Azure Traffic Manager, so the sync client kept intermittently
-trying to route over a gateway that wasn't there. pfSense is read-only for
-the agent, always, so the actual infrastructure fix had to come from me:
-setting WAN's IPv6 configuration to None. The agent's own workaround,
-disabling IPv6 on WSUS01's adapter, is what got that first sync through
-while I made the call on the real fix.
+pfSense's gateway status confirmed the diagnosis: `WAN_DHCP6`, the IPv6
+WAN gateway, was down with 100% packet loss while IPv4 stayed fully
+healthy. WSUS01 still had IPv6 enabled, and Microsoft's sync endpoint
+resolves an AAAA record, so the client kept intermittently routing over a
+gateway that no longer existed. pfSense stays read-only at all times, so
+the real fix, setting WAN's IPv6 configuration to None, went through as a
+separate, explicitly authorized change; disabling IPv6 on WSUS01's own
+adapter unblocked the first sync in the meantime. The benefit reached
+well beyond WSUS01: MECM01, untouched by any of this work, now falls back
+to IPv4 automatically too, since pfSense no longer delegates a routable
+IPv6 prefix to the LAN. One infrastructure fix resolved an issue
+affecting the entire lab.
 
-The pfSense-side fix turned out to help more than just WSUS01. Checking a
-machine the agent had never touched, MECM01, showed it now carries only a
-link-local IPv6 address, no global unicast address, no IPv6 default route
-at all: with WAN IPv6 set to None, pfSense stops delegating a routable
-prefix to the LAN, so every machine in the lab now falls back to IPv4
-automatically instead of hanging against a dead gateway. One fix, whole-lab
-effect.
+With connectivity resolved, one final step remained: WSUS01 had its own
+patches pending a reboot mid-sync. The sync was stopped cleanly, a
+checkpoint taken, the system rebooted, pending-reboot flags confirmed
+clear, and the sync resumed. The resulting history reads exactly as
+expected: failed, canceled during the reboot, then succeeded.
 
-With connectivity sorted, the sync itself needed one more push: WSUS01 had
-patches of its own pending a reboot mid-sync. The agent stopped the sync
-cleanly, checkpointed, rebooted (the box went through two boots finishing
-cumulative update installation, which is normal), verified no pending-reboot
-flags remained, and resumed. Final sync history reads exactly like it
-should: failed, canceled (the reboot), succeeded.
+## Nine patch rings, six of them switched off by default
 
-## Patch rings, because "confirm before touching the SQL AG" and "patch everything automatically" don't mix
+Once WSUS was healthy, the next requirement was real patch management:
+every domain-joined machine covered, staggered so the domain controllers
+and SQL AG nodes never go down together. That collides directly with a
+standing guardrail prohibiting any state change on the domain
+controllers, SQL AG nodes, or MECM servers without explicit confirmation
+first. A single Automatic Deployment Rule firing every month cannot
+satisfy that guardrail on its own.
 
-Once WSUS was healthy I asked for real patch management: every domain-joined
-machine covered, but staggered so the domain controllers and the SQL AG
-nodes never go down together. That collides directly with a standing rule:
-no state change on the domain controllers, the SQL AG nodes, or the MECM
-servers without my confirmation first. An Automatic Deployment Rule that
-just fires every month isn't compatible with that rule by itself.
-
-The agent's design was to build the ADR so it satisfies both asks at once.
-Nine ring collections, one deployment per ring off a single ADR, each with
-its own maintenance window one day apart:
+The design resolves both at once: nine ring collections, each with its
+own deployment off a single ADR, and maintenance windows staggered one
+day apart:
 
 | Ring | Systems | Window |
 |---|---|---|
@@ -86,178 +79,241 @@ its own maintenance window one day apart:
 | 5 SQL Secondary | SQL02 | 3rd Wed 01:00-03:00 |
 | 6 SQL Secondary | SQL03 | 3rd Thu 01:00-03:00 |
 | 7 SQL Primary | SQL01 | 3rd Fri 01:00-03:00 |
-| 8 | DC01 | 3rd Sat 01:00-03:00 |
-| 9 | DC02 | 3rd Sun 01:00-03:00 |
+| 8 Domain Controller | DC01 | 3rd Sat 01:00-03:00 |
+| 9 Domain Controller | DC02 | 3rd Sun 01:00-03:00 |
 
-Rings 1 and 2 are enabled and run unattended every cycle: neither touches a
-guarded system. Rings 3 through 9 are created with their deployment flag set
-to `False`. That's the actual confirmation gate, not a separate manual
-process bolted on afterward: every guarded-tier ring exists, fully
-configured, waiting, and has to be switched on by hand each month after I
-confirm the previous ring came through clean. For the SQL rings that means
-checking Always On sync health between each node; the agent queried live AG
-state before designing the ring order and confirmed SQL01 was primary,
-SQL02 and SQL03 secondary, both healthy, which is why the secondaries patch
-first and the primary goes last.
+![Patch ring collections in the MECM console]({{ '/assets/img/gallery/mecm-patch-rings-collections-general.png' | relative_url }})
+_Rings 2-7 as real collections: General Servers, MECM Passive/Active, SQL AG Secondary/Secondary/Primary_
 
-Getting a working MECM console to build any of this took its own detour.
-Installing it locally on MECM01 kept failing with a generic "invalid
-parameter" error and no log file at all, which turned out to be three
-separate cmdlet-syntax problems layered on top of each other: `New-CMSchedule`
-needs `-DayOfWeek` and `-WeekOrder` together for a monthly-by-weekday
-pattern, not a `-RecurInterval` value that doesn't actually exist for that
-case; `New-CMMaintenanceWindow -ApplyTo` only accepts `SoftwareUpdatesOnly`,
-not the value that seemed obvious; and creating a new deployment package
-inline via `-DeploymentPackageName` plus `-Location` fails outright,
-regardless of local or UNC path, for a reason still unexplained; creating
-the package as its own object first and referencing it by name afterward
-works fine. None of that showed up in a single error message, so each one
-took isolating separately.
+The domain controller rings are tracked separately, under their own
+collection scope rather than the flat naming used above:
 
-The installer itself had a smaller, mostly cosmetic problem: its 32-bit OSD
-boot-image extension fails to extract with `FDICopy failed with error code
-11`, confirmed unrelated to file corruption since Windows' own `expand.exe`
-extracts the identical cab cleanly. The core console and PowerShell module
-install and register fine before that step runs and aren't rolled back when
-it fails afterward, so the console works for everything patch-management
-related; OSD tooling just isn't installed, which the lab doesn't need yet.
+![Domain controller patch rings in their own collection scope]({{ '/assets/img/gallery/mecm-patch-rings-collections-dc-tier.png' | relative_url }})
+_DC01 and DC02, each its own ring, kept apart from the general-purpose collection tree_
 
-## "Optimize disk space" surfaces a 37 GB transaction log
+Rings 1 and 2 run unattended every cycle, since neither touches a guarded
+system. Rings 3 through 9 exist fully configured, but with their
+deployment flag set to `False`; that's the actual confirmation gate
+built into the design, not a manual process layered on afterward. Every
+guarded-tier ring is ready to go, but has to be switched on by hand, only
+after the previous ring completes cleanly. For the SQL rings, that means
+confirming Always On sync health first; live AG state (SQL01 primary,
+SQL02 and SQL03 healthy secondaries) is why the secondaries patch first
+and the primary goes last.
 
-WSUS was scoped to sync the entire "Windows" product family: 377 products,
-every Windows Server release back to 2003, every Windows client version,
-drivers, language packs. I asked the agent to narrow that to what's actually
-running. It surveyed OS version across every live VM directly rather than
-guess, which caught one thing worth catching: a WSUS category matching
-"Server 2025" turned out to be an Azure File Sync product name, not the OS,
-and a similar shortcut on SQL Server would have gotten the version wrong
-too, so it queried `@@VERSION` on SQL01 directly and got 2022, not the 2025
-the name match suggested. The real scope, matching installed reality
-exactly, turned out to be three products: `Windows Server, version 1903 and
-later` (the unified name every WS2019/2022/2025 update publishes under;
-there's no separate "Windows Server 2025" category), `Windows 11`, and
-`Microsoft SQL Server 2022`.
+![The Automatic Deployment Rule's Deployment Settings, all nine collections listed]({{ '/assets/img/gallery/mecm-patch-rings-adr.png' | relative_url }})
+_One ADR, nine deployments: Ring 1 (OP - All Workstations) and Ring 2 read Yes under Enabled, everything else reads No_
 
-That was the ask. What it actually found was that WSUS's own content
-directory was never the problem: it sits at 0.13 GB, because MECM downloads
-update content into its own deployment package rather than WSUS's local
-store. The real disk consumer was SUSDB itself, which lives on the SQL AG
-listener, not locally on WSUS01: 6.5 GB of data next to a 37.4 GB
-transaction log. `log_reuse_wait_desc` read `LOG_BACKUP`. No log backup had
-ever been taken against it.
+![Maintenance window on the SQL AG primary ring]({{ '/assets/img/gallery/mecm-patch-rings-maintenance-window-sql01.png' | relative_url }})
+_Ring 7 (SQL01, SQL AG Primary): the actual window, third Friday, matching the table above_
 
-SUSDB being an actual member of the Availability Group, alongside the MECM
-site database itself, ruled out the usual standalone-WSUS advice of
-switching it to SIMPLE recovery: Always On requires FULL recovery for any
-database it replicates, since replication happens by continuously shipping
-the log. The fix had to work within FULL recovery, which means log backups,
-which is what should have been happening the whole time and wasn't.
+Getting a working MECM console in place required its own detour:
+installing it locally on MECM01 repeatedly failed with a generic "invalid
+parameter" error and no log file, three unrelated cmdlet-syntax problems
+layered together. `New-CMSchedule` requires `-DayOfWeek` and `-WeekOrder`
+together for a monthly-by-weekday pattern, not the `-RecurInterval`
+value, which doesn't exist for that case. `New-CMMaintenanceWindow
+-ApplyTo` only accepts `SoftwareUpdatesOnly`, not the more
+intuitive-looking alternative. And a deployment package created inline
+via `-DeploymentPackageName` plus `-Location` fails outright regardless
+of path type, while creating it as its own object first works without
+issue. None of it surfaced as a distinct error message, so each had to be
+isolated independently.
 
-With my go-ahead, the agent took a log backup, which cleared the
-`LOG_BACKUP` wait but revealed a chain of others behind it, `OLDEST_PAGE`
-then `AVAILABILITY_REPLICA` then `LOG_BACKUP` again, which is normal for a
-log this bloated: each corrective step generates a small amount of new log
-that itself needs a backup cycle before the old backlog can actually
-release. It looped backup, checkpoint, and shrink until the wait cleared,
-which took one more pass, then shrank the log file from 37,448 MB to 520 MB.
-Availability Group health, checked before and after every single step,
-stayed `HEALTHY` on all three nodes the entire time.
+One smaller, cosmetic installer issue: the 32-bit OSD boot-image
+extension fails to extract, returning `FDICopy failed with error code
+11`, unrelated to corruption since Windows' own `expand.exe` extracts the
+same cab cleanly. This is a known, benign failure in the ConfigMgr
+console installer whenever the 32-bit boot image WIM isn't present, and
+safe to ignore. The core console and PowerShell module install and
+register fine before that step runs and aren't rolled back when it
+fails, so the console works for everything patch-management related;
+only OSD tooling is missing, which the lab doesn't need yet.
 
-## The SQL Agent job that couldn't exist because SQL Agent wasn't running
+## The disk space problem that wasn't about WSUS
 
-Fixing SUSDB's log once doesn't stop it from happening again, so I asked
-the agent to set up the actual log backup job. Querying `msdb.dbo.sysjobs`
-for existing jobs turned up exactly one, the default system history-purge
-job. Nothing was backing up logs anywhere on the AG, and it wasn't just
-SUSDB exposed to it: `CM_MHL`, the MECM site database, had the identical
-`LOG_BACKUP` wait sitting there unaddressed. Chasing why led to the actual
-root cause: `SQLSERVERAGENT` was stopped on all three nodes, despite being
-set to start automatically on all three. Not a deliberate configuration,
-just something that had apparently never been started since the AG went
-live.
+WSUS had been scoped to sync the entire "Windows" product family: 377
+products spanning every Windows Server release back to 2003, every
+client version, drivers, and language packs. Narrowing that to what's
+actually running meant surveying OS version across every live VM
+directly rather than guessing, which caught a real trap: a WSUS category
+matching "Server 2025" turned out to be an Azure File Sync product name,
+not the OS. The same shortcut on SQL Server would have gotten the version
+wrong too; `@@VERSION` on SQL01 confirmed 2022, not the 2025 the name
+suggested. The real scope: `Windows Server, version 1903 and later` (the
+unified name every WS2019, WS2022, and WS2025 update publishes under),
+`Windows 11`, and `Microsoft SQL Server 2022`.
 
-The job itself has to be AG-aware, since SQL Agent jobs are per-instance and
-don't follow the listener: it checks whether the local replica currently
-holds the primary role before doing anything, and if it does, loops every
-database in the AG that's in FULL recovery and backs each one up:
+That was the original ask. The investigation found something different:
+WSUS's own content directory was never the problem, using only 0.13 GB,
+since MECM stores update content separately in its own deployment
+package. The real disk consumer was the SUSDB database itself, which
+lives on the SQL Availability Group listener rather than locally on
+WSUS01: 6.5 GB of actual data sitting next to a 37.4 GB transaction log
+that had never once been backed up. SQL Server's own diagnostics
+confirmed why: the `log_reuse_wait_desc` field showed the log stuck
+waiting specifically on `LOG_BACKUP`, direct evidence that no backup had
+ever run against this database.
+
+SUSDB's membership in the Availability Group, alongside the MECM site
+database, ruled out the usual standalone-WSUS fix of switching to SIMPLE
+recovery: Always On requires FULL recovery for any database it
+replicates, since replication ships the log continuously. The fix had to
+work within FULL recovery, which means log backups, exactly what should
+have been happening all along and wasn't.
+
+A log backup cleared the `LOG_BACKUP` wait but revealed a chain behind
+it: `OLDEST_PAGE`, then `AVAILABILITY_REPLICA`, then `LOG_BACKUP` again,
+normal for a log this bloated since each corrective step generates new
+log that itself needs backing up. Backup, checkpoint, and shrink looped
+until the wait cleared (one more pass), taking the log from 37,448 MB to
+520 MB. AG health, checked before and after every step, stayed `HEALTHY`
+on all three nodes throughout.
+
+## No SQL Agent, no log backups
+
+Fixing SUSDB's log once doesn't prevent it recurring, so the next step
+was a real, permanent log backup job. Querying `msdb.dbo.sysjobs` turned
+up exactly one job, the default system history-purge. Nothing was
+backing up logs anywhere on the AG, and SUSDB wasn't alone: `CM_MHL`, the
+MECM site database, carried the identical unaddressed `LOG_BACKUP` wait.
+Root cause: `SQLSERVERAGENT` was stopped on all three nodes, despite
+being configured to start automatically on each. This wasn't a
+deliberate configuration choice; the service had apparently never been
+started since the AG went live.
+
+The job has to be AG-aware, since SQL Agent jobs are scoped per-instance
+and don't follow the listener: it checks whether the local replica holds
+primary, then loops through every FULL-recovery database in the AG and
+backs each one up:
 
 ```sql
 IF EXISTS (
-    SELECT 1 FROM sys.dm_hadr_availability_replica_states ars
+    SELECT 1
+    FROM sys.dm_hadr_availability_replica_states ars
     JOIN sys.availability_replicas ar ON ars.replica_id = ar.replica_id
     WHERE ar.replica_server_name = @@SERVERNAME AND ars.role_desc = 'PRIMARY'
 )
 BEGIN
+    DECLARE @dbname sysname, @path nvarchar(500), @ts nvarchar(20), @msg nvarchar(500)
+    SET @ts = REPLACE(REPLACE(REPLACE(CONVERT(varchar(19), GETDATE(), 120),'-',''),':',''),' ','_')
+
     DECLARE db_cursor CURSOR FOR
-        SELECT db.name FROM sys.databases db
-        JOIN sys.availability_databases_cluster adc
-            ON db.group_database_id = adc.group_database_id
+        SELECT db.name
+        FROM sys.databases db
+        JOIN sys.availability_databases_cluster adc ON db.group_database_id = adc.group_database_id
         WHERE db.recovery_model_desc = 'FULL' AND db.state_desc = 'ONLINE'
-    -- backs up each one to \\FS01\SQLBackup\LogBackups\<db>\
+
+    OPEN db_cursor
+    FETCH NEXT FROM db_cursor INTO @dbname
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @path = '\\FS01\SQLBackup\LogBackups\' + @dbname + '\' + @dbname + '_LOG_' + @ts + '.trn'
+        SET @msg = 'Backing up log for ' + @dbname + ' to ' + @path
+        RAISERROR(@msg, 0, 1) WITH NOWAIT
+        BACKUP LOG @dbname TO DISK = @path WITH COMPRESSION
+        FETCH NEXT FROM db_cursor INTO @dbname
+    END
+    CLOSE db_cursor
+    DEALLOCATE db_cursor
+END
+ELSE
+BEGIN
+    PRINT 'Not primary replica -- skipping log backups on this node.'
 END
 ```
 
-Running every 15 minutes, deployed identically to all three nodes, which is
-what makes it failover-safe without any extra logic: whichever node holds
-primary at any given moment is the one that actually runs the backup, and
-the other two see the role check fail and exit as a no-op. Starting the
-Agent service followed the same one-at-a-time pattern as everything else on
-this AG: SQL01, checkpoint the health check, then SQL02, then SQL03, AG
-health confirmed `HEALTHY` before and after each. The agent test-ran the job
-manually before trusting the schedule, and real backup files landed for
-SUSDB, CM_MHL, and AGSeed on the first run. Final check showed
-`log_reuse_wait_desc` clear on SUSDB and AGSeed, mid-transition on CM_MHL
-(expected, not concerning), and the AG still `HEALTHY` on all three nodes
+Running every 15 minutes and deployed identically to all three nodes is
+what makes it failover-safe without extra logic: whichever node holds
+primary runs the backup, the other two fail the role check and exit as a
+no-op. Starting the Agent service followed the AG's standard
+one-at-a-time pattern: SQL01, then SQL02, then SQL03, health confirmed
+`HEALTHY` before and after each. A manual test run before trusting the
+schedule produced real backup files for SUSDB, CM_MHL, and AGSeed on the
+first pass; final check showed `log_reuse_wait_desc` clear on SUSDB and
+AGSeed, mid-transition on CM_MHL (expected), and the AG still `HEALTHY`
 throughout.
 
 ## Lessons learned
 
-- **A diagnostic that succeeds doesn't mean the real traffic pattern does.**
-  `nslookup` and a bare `Test-NetConnection` both looked clean while the
-  actual sync client kept failing intermittently, because the difference
-  was which IP family got used, not whether the name resolved or the port
-  was reachable.
-- **A dead gateway that "only" affects IPv6 doesn't stay contained.** WSUS
-  was the symptom that got investigated, but the pfSense fix changed
-  routing behavior for the whole lab, including machines nobody had
-  touched.
-- **"Confirm before touching the guarded systems" has to be built into the
-  automation, not layered on top of it.** Creating nine ring deployments
-  with six of them switched off by default is what actually satisfies that
-  rule; a single ADR covering everything wouldn't have, no matter how
-  carefully it was scheduled.
-- **A cmdlet failing with a generic error and no log file usually means the
-  command line never got that far.** Three unrelated syntax problems all
-  produced the identical unhelpful message; isolating each one required
-  testing them independently rather than trusting the error text.
-- **FULL recovery model without log backups is worse than SIMPLE recovery
-  with none.** It looks like point-in-time recovery is available because
-  the setting says FULL, but without backups actually running, none of that
-  protection is real, and the log grows without bound in the meantime.
-- **A service set to start automatically isn't the same as a service that's
-  running.** Every job creation and every scheduled task depending on SQL
-  Agent had been silently doing nothing since the AG went live, and nothing
-  about the AG's own health checks would have surfaced that on its own.
+- **A passing diagnostic only proves the diagnostic passed, not that the
+  real workload will succeed.** `nslookup` and `Test-NetConnection` both
+  succeeded while the sync client kept failing: the actual gap was which
+  IP family was used on each attempt, something neither basic test
+  checks. When a clean report contradicts a reported failure, test with
+  the same protocol and path the real traffic uses for an accurate
+  picture.
+- **A "minor" protocol-level failure rarely stays contained to one
+  server.** WSUS was the one system under investigation, but the
+  underlying IPv6 gateway was dead lab-wide; fixing it changed routing
+  behavior on every machine in the environment, including several nobody
+  had suspected had an issue.
+- **Build the approval gate into the automation, not around it.** Nine
+  ring deployments, six of them disabled by default, actually satisfy a
+  policy like "confirm before touching production"; one rule covering
+  everything, however carefully scheduled, would not. If a safety rule
+  matters, make the tooling structurally incapable of skipping it.
+- **A generic error with no log file usually means the cmdlet never
+  actually ran.** `New-CMSchedule`, `New-CMMaintenanceWindow`, and the
+  inline deployment-package creation each failed here with the identical
+  unhelpful message, for three completely unrelated reasons; isolating
+  each parameter individually was the only way to find the real cause.
+  Don't over-read a vague error as a description of what went wrong;
+  treat it as a signal to test your inputs one at a time.
+- **A recovery model is more of an intention than a guarantee.** With
+  SIMPLE recovery, log space is reclaimed automatically at each
+  checkpoint, so the log can't grow unchecked, but you accept from the
+  start that point-in-time recovery isn't available. FULL recovery
+  reverses that trade-off: SQL Server retains every transaction until a
+  backup job explicitly tells it to release them. If that backup job
+  never runs, nothing ever does, which is precisely what happened in
+  this case. The log keeps expanding while the setting continues to
+  report FULL, quietly suggesting a safety net that was never actually
+  put in place. That's what makes it more dangerous than SIMPLE with
+  nothing configured: with SIMPLE, you at least know what you're giving
+  up. With FULL and no backups, no one realizes the problem until they
+  need to restore to a specific point in time, look for a backup chain,
+  and find it was never there. Check that the backup job actually runs.
+  Don't just trust what the setting implies.
+- **"Set to start automatically" and "currently running" are two
+  different facts, and only one of them matters.** Every job depending on
+  SQL Agent had silently done nothing since the Availability Group went
+  live, and nothing in the AG's own health monitoring ever flagged it,
+  because the two systems watch completely different things. AG health
+  (`HEALTHY`, `SYNCHRONIZED`, the dashboard) is the Database Engine
+  reporting on its own replication: is the log shipping to secondaries
+  in real time, is failover safe right now. SQL Agent is a separate
+  Windows service that runs scheduled work, including the log backup
+  job, and the AG has no dependency on it and no visibility into it. The
+  AG can report `HEALTHY` all day while the one thing responsible for
+  keeping the log backed up is dead, because checking on Agent was never
+  part of its job. Check actual service state directly; don't infer it
+  from a startup-type setting, and don't assume a healthy AG means the
+  whole SQL tier is being looked after.
 
 ## Division of labor
 
-The agent: every diagnostic step tracing the WSUS failure to pfSense's
-IPv6 gateway, the ring collection and maintenance window design, the ADR
-and its nine deployments, isolating the console install and cmdlet-syntax
-problems, the OS and SQL version survey that caught the Server-2025 and
-SQL-2022 naming traps, finding the SUSDB log bloat and its actual root
-cause, the log backup job's AG-aware design, and every checkpoint and
-health check along the way. Me: the pfSense WAN IPv6 fix itself, since
-pfSense stays read-only for the agent always, confirming the guarded-tier
-deployment design and the SUSDB recovery-model correction, and the
-go-ahead for the log backup fix and the new SQL Agent job.
+The agent: tracing the WSUS failure to pfSense's IPv6 gateway, the ring
+and maintenance-window design, the ADR's nine deployments, isolating the
+console/cmdlet-syntax problems, the OS/SQL version survey, finding the
+SUSDB log bloat and its root cause, the log backup job's AG-aware design,
+and every checkpoint along the way. Me: the pfSense WAN IPv6 fix itself
+(always read-only for the agent), confirming the guarded-tier design and
+the recovery-model constraint, and the go-ahead for the log backup fix
+and new SQL Agent job.
 
 ## What's next
 
-The guarded-tier rings need their first real monthly cycle to prove the
-manual-enable pattern in practice, not just in design. Full and differential
-backups for the AG appear to be running through some mechanism that predates
-this fix, never identified during this pass; worth confirming what it
-actually is before assuming it's solid. Beyond that, the roadmap holds where
-it's held for a while now: the RD Session-based farm, then Operations
-Manager, then Azure DevOps.
+The guarded-tier rings still need their first real monthly cycle to
+prove the manual-enable pattern in practice. The full and differential
+backups sitting in `msdb.dbo.backupset` turned out to have a real
+source: every one of them lines up, within seconds, with a Hyper-V
+checkpoint taken against SQL01 for unrelated reasons. Hyper-V's
+production checkpoints invoke the SQL Server VSS Writer inside the
+guest, which performs a full backup of every database as part of
+building an application-consistent snapshot. That's a genuine backup,
+but not a substitute for a scheduled one: it only happens when someone
+checkpoints the box, so coverage is exactly as reliable as the last
+unrelated maintenance task that triggered one, not something to plan a
+restore strategy around. Beyond that: the RD session-based farm, then
+Operations Manager, then Azure DevOps.

@@ -133,3 +133,27 @@
   category: YubiKey Smart Card Logon
   caption: "WKS01 — YubiKey PIV smart card logon"
   post: /posts/yubikey-piv-smartcard-logon/
+
+- file: mecm-patch-rings-collections-general.png
+  platform: Hyper-V Lab
+  category: MECM Patch Rings
+  caption: "Patch ring collections — General Servers, MECM, and SQL AG tiers"
+  post: /posts/wsus-patch-rings-sql-log-backups/
+
+- file: mecm-patch-rings-collections-dc-tier.png
+  platform: Hyper-V Lab
+  category: MECM Patch Rings
+  caption: "Domain controller patch rings, tracked separately (DC01/DC02)"
+  post: /posts/wsus-patch-rings-sql-log-backups/
+
+- file: mecm-patch-rings-adr.png
+  platform: Hyper-V Lab
+  category: MECM Patch Rings
+  caption: "One ADR, nine deployments — Ring 1/2 enabled, Rings 3-9 disabled"
+  post: /posts/wsus-patch-rings-sql-log-backups/
+
+- file: mecm-patch-rings-maintenance-window-sql01.png
+  platform: Hyper-V Lab
+  category: MECM Patch Rings
+  caption: "Maintenance window for Ring 7 — SQL AG Primary (SQL01)"
+  post: /posts/wsus-patch-rings-sql-log-backups/
