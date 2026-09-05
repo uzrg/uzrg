@@ -157,3 +157,40 @@
   category: MECM Patch Rings
   caption: "Maintenance window for Ring 7 — SQL AG Primary (SQL01)"
   post: /posts/wsus-patch-rings-sql-log-backups/
+
+- file: rds-server-manager-deployment-overview.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "Server Manager: all 5 RDS roles across 6 servers, both RemoteApp collections"
+  post: /posts/rds-farm-base-deployment/
+
+- file: rds-web-access-login.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "RD Web Access login, certificate trusted, no browser warnings"
+  post: /posts/rds-farm-base-deployment/
+
+- file: rds-web-access-remoteapps.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "All four published RemoteApps, listed across both collections"
+  post: /posts/rds-farm-base-deployment/
+
+- file: rds-web-access-certificate-picker.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "test.labuser's YubiKey PIV cert, offered by the browser's native picker"
+  post: /posts/rds-farm-base-deployment/
+
+- file: rds-web-access-smartcard-signin-success.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "Signed in via smart card: exactly the two apps RDS-General-Users grants, one Terminal icon"
+  post: /posts/rds-farm-base-deployment/
+
+- file: rds-web-access-administrator-fixed-groups.png
+  platform: Hyper-V Lab
+  category: RDS Session Farm
+  caption: "Administrator's resource list after removing the group overlap: one Terminal icon, no Notepad++"
+  post: /posts/rds-farm-base-deployment/
+
