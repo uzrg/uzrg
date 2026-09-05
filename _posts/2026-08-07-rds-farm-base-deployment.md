@@ -95,9 +95,9 @@ WAN/NAT flakiness: pfSense's own outbound connectivity tested clean,
 but traffic forwarded from VLAN10 failed unpredictably, WSUS01
 succeeding on one test while DC01, MECM01, and RDSCB failed the same
 test seconds apart. A real contributing factor, just not the actual
-blocker; it finally got root-caused in
-[the next build in this series]({% post_url 2026-08-08-vscode-browser-server-and-egress-fix %}),
-a missing pfSense firewall rule, not the network itself.
+blocker; it finally got root-caused in the next build in this series
+(a missing pfSense firewall rule, not the network itself), covered in
+its own post once that one publishes.
 
 The second theory blamed the install media. Explicit local media, a
 Windows Server 2025 ISO mounted on all five RDS VMs, failed
