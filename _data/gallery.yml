@@ -211,3 +211,45 @@
   category: Browser VS Code Server
   caption: "Recurring WebSocket close, error 1006, forcing a full page reload"
   post: /posts/vscode-browser-server-and-egress-fix/
+
+- file: azure-devops-server-labops-overview.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "LabOps project overview, signed in with a domain account, no separate password"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-labops-repo.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "The LabOps Git repo, created via the REST API, clone URL ready"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-work-items-empty.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "Work items / Boards, live and reachable, nothing tracked yet"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-pipelines-empty.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "Pipelines waiting for a build agent and real content to build"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-tf246017-outage-collection.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "The TF246017 outage: 500 error at the collection root"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-tf246017-outage-labops.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "Same outage, 25 seconds later, at the LabOps project URL"
+  post: /posts/azure-devops-server-onprem/
+
+- file: azure-devops-server-labops-testlabuser.png
+  platform: Hyper-V Lab
+  category: Azure DevOps Server
+  caption: "test.labuser's own domain sign-in, same project, no separate password either"
+  post: /posts/azure-devops-server-onprem/
