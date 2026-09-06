@@ -194,3 +194,20 @@
   caption: "Administrator's resource list after removing the group overlap: one Terminal icon, no Notepad++"
   post: /posts/rds-farm-base-deployment/
 
+- file: vscode-browser-administrator-instance.png
+  platform: Hyper-V Lab
+  category: Browser VS Code Server
+  caption: "Administrator's isolated instance, loaded at /administrator/"
+  post: /posts/vscode-browser-server-and-egress-fix/
+
+- file: vscode-browser-testlabuser-instance.png
+  platform: Hyper-V Lab
+  category: Browser VS Code Server
+  caption: "Both users' instances open at once, proving path-based isolation"
+  post: /posts/vscode-browser-server-and-egress-fix/
+
+- file: vscode-browser-websocket-error.png
+  platform: Hyper-V Lab
+  category: Browser VS Code Server
+  caption: "Recurring WebSocket close, error 1006, forcing a full page reload"
+  post: /posts/vscode-browser-server-and-egress-fix/
