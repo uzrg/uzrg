@@ -181,7 +181,8 @@ All four Trusted.
 
 This template earns its keep beyond one certificate: it's the standard
 answer whenever a future service needs a manually specified SAN, and
-gets reused as-is later in this build-out, covered in its own post.
+gets reused as-is later in this build-out, in
+[the browser VS Code server build]({% post_url 2026-08-08-vscode-browser-server-and-egress-fix %}).
 
 ## Two RemoteApp collections, and the app with no .exe to point at
 
