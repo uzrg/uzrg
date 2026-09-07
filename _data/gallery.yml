@@ -253,3 +253,27 @@
   category: Azure DevOps Server
   caption: "test.labuser's own domain sign-in, same project, no separate password either"
   post: /posts/azure-devops-server-onprem/
+
+- file: scom-management-servers-healthy.png
+  platform: Hyper-V Lab
+  category: SCOM 2025
+  caption: "All 3 management servers healthy, load spread across the group"
+  post: /posts/scom-2025-superlab-build/
+
+- file: scom-console-load-balanced-dashboards.png
+  platform: Hyper-V Lab
+  category: SCOM 2025
+  caption: "The load-balanced web console, signed in via Windows Auth, full dashboard list"
+  post: /posts/scom-2025-superlab-build/
+
+- file: scom-application-advisor-reports.png
+  platform: Hyper-V Lab
+  category: SCOM 2025
+  caption: "Application Advisor's full report catalog, working end to end"
+  post: /posts/scom-2025-superlab-build/
+
+- file: scom-application-diagnostics-working.png
+  platform: Hyper-V Lab
+  category: SCOM 2025
+  caption: "Application Diagnostics loaded clean, past the security check that never used to pass"
+  post: /posts/scom-2025-superlab-build/
