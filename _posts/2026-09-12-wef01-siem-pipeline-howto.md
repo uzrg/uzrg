@@ -368,8 +368,13 @@ WEF01:
 
 ```
 # /etc/rsyslog.d/90-wef01.conf on the Linux host
-*.* @@wef01.yourdomain.tld:514   # TCP; use a single @ for UDP
+*.* @wef01.yourdomain.tld:514   # single @ = UDP, matching WEF01's udp input in Phase 6
 ```
+
+This build's collector side listens on UDP specifically (Phase 6's
+`udp` input, port 514) — rsyslog's `@@` prefix means TCP, so make sure
+the sender side matches with a single `@` rather than defaulting to
+the more common `@@` example you'll see in most rsyslog docs.
 
 Network devices that support remote syslog natively (most firewalls,
 switches) just need their syslog destination pointed at WEF01 the same
@@ -444,6 +449,13 @@ function Copy-NewBytes {
     if ($file.Length -eq $lastOffset) { return }
 
     try {
+        # For an IIS source (...\LogFiles\W3SVC1\u_ex....log) this
+        # correctly yields the site ID, W3SVC1. For DNS's debug log
+        # (C:\Windows\System32\dns\dns.log) it yields "System32" -
+        # cosmetic, not a bug: Filebeat's glob matches on the IIS/DNS
+        # segment one level up in the drop-share path, not on this
+        # folder name, so a nonsense-looking "System32" subfolder here
+        # doesn't break anything downstream.
         $siteFolder = Split-Path (Split-Path $SourcePath -Parent) -Leaf
         $destPath = Join-Path $DropShare "$siteFolder\$($file.Name)"
         $destDir = Split-Path $destPath -Parent
@@ -585,7 +597,11 @@ Set the heap directly in `config/jvm.options` (note: a separate
 `jvm.options.d/heap.options` file did **not** get picked up in this
 Logstash build — verify your version actually reads that directory
 before relying on it, and check with the real running process's
-command line, not just the file you wrote):
+command line, not just the file you wrote). Append these two lines at
+the **end** of the existing file rather than editing near the top —
+`jvm.options` ships with a long list of other flags and commented-out
+defaults, and there's no reason to disturb any of them just to add a
+heap override:
 
 ```
 -Xms1536m
@@ -594,9 +610,9 @@ command line, not just the file you wrote):
 
 1536 MB comfortably covers this pipeline's real volume including the
 Sysmon spike that caused the original crash; raise it further if you
-add enrichment filters (Phase 6's Enrichment section) or higher-volume
-sources later. Confirm the value actually took effect by checking the
-live process, not the config file:
+add enrichment filters (see Enrichment below) or higher-volume sources
+later. Confirm the value actually took effect by checking the live
+process, not the config file:
 
 ```powershell
 (Get-CimInstance Win32_Process -Filter "Name='java.exe'").CommandLine
@@ -804,6 +820,34 @@ output {
 }
 ```
 
+A genuinely healthy Windows-forwarded event's `rubydebug` output for
+this build looks like the excerpt below — `event.dataset` (not
+`data_stream.dataset`) really is where `windows.forwarded` lives, which
+is exactly what the filter's first condition checks:
+
+```ruby
+{
+    "event" => {
+        "dataset" => "windows.forwarded",
+        ...
+    },
+    "data_stream" => {
+        "dataset" => "windows.forwarded",
+        ...
+    },
+    ...
+}
+```
+
+(Both fields carry the same value here, which is what actually
+resolved the concern — but don't take that as a universal guarantee
+for every Elastic Agent version or input type. If your own
+`rubydebug` output shows the value only under `data_stream.dataset`
+and `event.dataset` is empty or absent, change the filter's condition
+to `[data_stream][dataset] == "windows.forwarded"` instead — the
+`stdout` output above is exactly how you'd catch that before it ships,
+not after.)
+
 **Two real bugs were found in this exact filter, one of them live and
 in production**:
 
@@ -828,6 +872,15 @@ in production**:
    caught this in seconds instead of costing a live crash-and-restart
    cycle.
 
+   One tradeoff worth knowing about the substring approach: since the
+   `IIS` branch is checked first, a host literally named something
+   like `IIS-SERVER-01` would have its *DNS* logs land under
+   `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` and get mislabeled `iis`
+   anyway, because the substring match doesn't care which path segment
+   it hits. That's a hostname-naming collision to avoid, not a regex
+   problem worth re-engineering around — don't name a host `IIS-*` in
+   this lab and it never comes up.
+
 **One environment-specific gotcha worth flagging generally**: if you're
 extracting either the Elastic Agent or Logstash zip on a Windows host
 with Defender's real-time scanning on, expect extraction to crawl —
@@ -837,6 +890,51 @@ exclusion for the install path, plus using .NET's
 `[System.IO.Compression.ZipFile]::ExtractToDirectory` instead of
 `Expand-Archive`, turned a stalled multi-hour extraction into a
 few-second one.
+
+## Enrichment: ATT&CK labels from Sysmon rule names
+
+The tier-tagging filter above is already real enrichment — tagging
+each event with which collection path it arrived through. The other
+concrete example worth showing is the one this whole build was set up
+for back in Phase 2: turning `sysmon-modular`'s ATT&CK-labeled rule
+names into structured fields, which is exactly the kind of thing
+Pipeline A's Logstash filters can do that Pipeline B's Beats-only
+processors realistically can't.
+
+Recall the `RenderedText` caveat from Phase 2: Sysmon's `RuleName`
+arrives embedded in the rendered `message` text, not as its own field,
+so this needs a `grok` pass against that text rather than a plain
+field reference. `sysmon-modular`'s rule names embed the ATT&CK
+technique directly (e.g. `technique_id=T1055,technique_name=Process
+Injection`), so a second grok stage against the extracted rule name
+gets you there:
+
+```ruby
+filter {
+  if [winlog][channel] == "Microsoft-Windows-Sysmon/Operational" {
+    grok {
+      match => { "message" => "RuleName:\s*%{DATA:sysmon_rule}\n" }
+    }
+    if [sysmon_rule] and [sysmon_rule] != "-" {
+      grok {
+        match => {
+          "sysmon_rule" => "technique_id=%{DATA:[attack][technique]},technique_name=%{DATA:[attack][technique_name]}"
+        }
+        tag_on_failure => []   # rules with no ATT&CK mapping shouldn't error, just skip enrichment
+      }
+    }
+  }
+}
+```
+
+`tag_on_failure => []` matters here — plenty of legitimate Sysmon rules
+(especially generic ones like `RuleName: -`) won't match the
+`technique_id=...` shape at all, and the default `_grokparsefailure`
+tag on every one of those would drown out genuinely useful tags with
+noise. Verify this the same way as the tier-tagging filter: a
+`stdout { codec => rubydebug }` on a real Sysmon event, checking for
+`attack.technique` in the output, before trusting it against the full
+volume.
 
 ## Phase 7 — Verify pipeline A actually works
 
