@@ -5,7 +5,7 @@ date: 2026-09-12 00:00:00 +0800
 categories: [Blogging, Homelab, Virtualization, Microsoft, HyperV, Windows Server]
 tags: [Windows Event Forwarding, Elastic, Winlogbeat, Filebeat, Logstash, Sysmon, Syslog, IIS, DNS, How-To, Tutorial]
 pin: false
-mermaid: true
+mermaid: false
 ---
 
 # A step-by-step guide: Windows Event Forwarding + a SIEM-shaped pipeline, built two different ways
@@ -50,43 +50,36 @@ Forwarding subscription or an Elastic Beats pipeline before.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Sources["Sources"]
-        DC["Domain Controllers OU"]
-        SRV["Servers OU"]
-        WKS["Workstations OU"]
-        LNX["UBUNTU01 / future Linux"]
-        NET["pfSense / network devices"]
-        IIS["IIS-hosting servers"]
-        DNS["DC01 / DC02 DNS debug logs"]
-    end
-
-    DC -- "GPO: WEF-Forwarding-DCs" --> WEF
-    SRV -- "GPO: WEF-Forwarding-MemberServers" --> WEF
-    WKS -- "GPO: WEF-Forwarding-Workstations" --> WEF
-    LNX -- "rsyslog, UDP" --> WEF
-    NET -- "syslog" --> WEF
-    IIS -- "FileSystemWatcher tail" --> DROP["\\WEF01\LogDrop"]
-    DNS -- "debug text log tail" --> DROP
-
-    WEF["WEF01: ForwardedEvents channel"]
-    DROP --> WEF01PIPE
-
-    subgraph WEF01PIPE["WEF01 shipping layer (two independent pipelines)"]
-        direction LR
-        subgraph A["Pipeline A"]
-            EA["Elastic Agent"] --> LS["Logstash"] --> FA["rotating file output"]
-        end
-        subgraph B["Pipeline B"]
-            WLB["Winlogbeat"] --> FB1["rotating file output"]
-            FLB["Filebeat"] --> FB2["rotating file output"]
-        end
-    end
-
-    FA -.->|"swap point"| KAFKA1[("Kafka (later)")]
-    FB1 -.->|"swap point"| KAFKA2[("Kafka (later)")]
-    FB2 -.->|"swap point"| KAFKA2
+```
+  Domain Controllers OU   --[GPO: WEF-Forwarding-DCs]-->            \
+  Servers OU              --[GPO: WEF-Forwarding-MemberServers]-->   WEF01's
+  Workstations OU         --[GPO: WEF-Forwarding-Workstations]-->   /ForwardedEvents
+                                                                      channel
+  UBUNTU01 / future Linux --[rsyslog, UDP]------------------------->   |
+  pfSense / network devices --[syslog]------------------------------> |
+                                                                       |
+  IIS-hosting servers      --[FileSystemWatcher tail]--\              |
+  DC01 / DC02 DNS debug logs --[debug text log tail]---->  \\WEF01\LogDrop
+                                                              |
+                                                              |
+              +-----------------------------------------------------+
+              |         WEF01 shipping layer, built two ways         |
+              |                                                       |
+              |   Pipeline A                    Pipeline B            |
+              |   Elastic Agent                 Winlogbeat            |
+              |       |                             |                 |
+              |       v                             v                 |
+              |   Logstash                   rotating file output     |
+              |       |                                               |
+              |       v                     Filebeat                  |
+              |  rotating file output           |                     |
+              |                                 v                     |
+              |                          rotating file output         |
+              +-----------------------------------------------------+
+                       |                              |
+                       v                              v
+                (swap point)                   (swap point)
+                Kafka (later)                  Kafka (later)
 ```
 
 ## Prerequisites
