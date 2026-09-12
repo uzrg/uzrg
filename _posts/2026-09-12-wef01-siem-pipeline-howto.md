@@ -58,8 +58,8 @@ Forwarding subscription or an Elastic Beats pipeline before.
   UBUNTU01 / future Linux, pfSense / network devices
       --[rsyslog / syslog]-->  WEF01
 
-  IIS-hosting servers, DC01 / DC02 DNS debug logs
-      --[FileSystemWatcher tail]-->  \\WEF01\LogDrop\<host>\...
+  IIS-hosting servers    --[FileSystemWatcher tail]-->  \\WEF01\LogDrop\IIS\<host>\...
+  DC01 / DC02 DNS debug logs --[FileSystemWatcher tail]-->  \\WEF01\LogDrop\DNS\<host>\...
 
                               |
                               v
@@ -880,8 +880,9 @@ to `[data_stream][dataset] == "windows.forwarded"` instead — the
 `stdout` output above is exactly how you'd catch that before it ships,
 not after.)
 
-**Two real bugs were found in this exact filter, one of them live and
-in production**:
+**This exact filter went through three real, live findings before
+landing where it is now** — not a hypothetical example, an actual
+history:
 
 1. **The tier-tagging logic above originally matched a bare
    `/LogDrop/` regex**, which catches both IIS and DNS paths (they
@@ -903,15 +904,15 @@ in production**:
    for no real benefit. `--config.test_and_exit` (below) would have
    caught this in seconds instead of costing a live crash-and-restart
    cycle.
-
-   A bare substring match has a real tradeoff worth naming, though: on
-   a **host-first** layout (`\\WEF01\LogDrop\<host>\IIS\...`), a host
-   literally named `IIS-SERVER-01` would have its *DNS* logs land
-   under `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` — and since the `IIS`
-   branch is checked first, that path gets mislabeled `iis` anyway,
-   because a bare `/IIS/` substring doesn't care which path segment it
-   actually hit. Hoping nobody ever names a host that way isn't a real
-   fix for a pattern other people will build from.
+3. **The bare substring fix still had a real tradeoff, caught in
+   review rather than in production.** On a **host-first** layout
+   (`\\WEF01\LogDrop\<host>\IIS\...`), a host literally named
+   `IIS-SERVER-01` would have its *DNS* logs land under
+   `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` — and since the `IIS` branch
+   is checked first, that path gets mislabeled `iis` anyway, because a
+   bare `/IIS/` substring doesn't care which path segment it actually
+   hit. Hoping nobody ever names a host that way isn't a real fix for a
+   pattern other people will build from.
 
    **The actual fix is to remove the ambiguity from the path layout
    itself, not to patch around it in the regex**: put the type
@@ -1408,6 +1409,17 @@ fix is usually smaller than the symptom suggests.
 **Two shippers pointed at the same UDP port both fail to bind**
 - Cause: only one process can own a UDP port for receiving at a time
 - Fix: pick different ports, or stop one before testing the other
+
+**A DNS event is tagged `iis` (or vice versa) even after the tier-tagging fix**
+- Cause: host-first drop-share layout (`LogDrop\<host>\IIS`) lets a
+  host's own name collide with the other type's substring match
+- Fix: type-first layout (`LogDrop\IIS\<host>`) instead — see Phase 5/6
+
+**Two tailer instances on the same host silently lose byte-offset progress**
+- Cause: both defaulted to the same hardcoded state file (only happens
+  on a host running more than one tailer instance, like DC01 tailing
+  both IIS and DNS)
+- Fix: distinct `-StateFilePath` per instance
 
 ## What's next
 
