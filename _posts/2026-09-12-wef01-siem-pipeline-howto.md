@@ -393,7 +393,12 @@ files every few minutes (real detection latency cost), this uses a
   active file can be tailed while IIS is still writing to it.
 - The tailer tracks a per-file byte offset in a small local state file
   (survives restarts) and appends only new bytes to
-  `\\WEF01\LogDrop\<hostname>\IIS\`.
+  `\\WEF01\LogDrop\IIS\<hostname>\` — **type first, hostname second**,
+  not the other way around. This isn't arbitrary: it's what makes the
+  Logstash tier-tagging filter in Phase 6 provably unambiguous
+  regardless of what any given host is named (see that section for
+  why hostname-first ordering is a real trap, not just a style
+  choice).
 - Run it as a Scheduled Task, "At startup," restart-on-failure.
 - DNS's live Analytical channel turns out to be a dead end for
   forwarding — see the callout below — so DNS uses the classic debug
@@ -420,11 +425,18 @@ param(
     [string]$LogDirectoriesRaw,
 
     [Parameter(Mandatory)]
-    [string]$DropShare
+    [string]$DropShare,
+
+    # Defaults to living next to the script itself rather than a
+    # hardcoded lab-specific path - this script has no dependency on
+    # any particular directory convention, so nothing here should
+    # assume one either. Override explicitly if you deploy the script
+    # somewhere read-only.
+    [string]$StateFilePath = (Join-Path $PSScriptRoot 'tailer-state.json')
 )
 
 $LogDirectories = $LogDirectoriesRaw -split ';'
-$stateFile = 'C:\LabOps\tailer-state.json'
+$stateFile = $StateFilePath
 $sweepIntervalSeconds = 15
 
 # Shared across the main thread and event-handler threads, so both the
@@ -521,12 +533,27 @@ and restarts on its own if it ever crashes:
 
 ```powershell
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument `
-    '-NoProfile -ExecutionPolicy Bypass -File C:\LabOps\Start-LogTailer.ps1 -LogDirectoriesRaw "C:\inetpub\logs\LogFiles\W3SVC1" -DropShare "\\WEF01\LogDrop\DEVOPS01\IIS"'
+    '-NoProfile -ExecutionPolicy Bypass -File C:\LabOps\Start-LogTailer.ps1 -LogDirectoriesRaw "C:\inetpub\logs\LogFiles\W3SVC1" -DropShare "\\WEF01\LogDrop\IIS\DEVOPS01"'
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName 'LogTailer' -Action $action -Trigger $trigger `
     -Settings $settings -User 'SYSTEM' -RunLevel Highest
 ```
+
+**A real bug this exact script hit, found on the one host running two
+instances of it**: DC01 tails both its own IIS logs and DNS's debug
+log, as two separate scheduled tasks running the same script content
+under different names. Both instances defaulted to the same state
+file, since the original version of this script hardcoded
+`C:\LabOps\iis-tailer-state.json` rather than deriving it per-instance
+— two independent processes writing to the same JSON file on every
+flush, racing each other and silently corrupting whichever one wrote
+last. `-StateFilePath` above exists specifically to fix this: give
+each instance running on the same host its own explicit, distinct
+path (e.g. `iis-tailer-state.json` vs `dns-tailer-state.json`) rather
+than relying on the default. A host running only one instance of this
+script never hits this — it's specific to any host, like DC01 here,
+that has more than one reason to run it.
 
 ### Why DNS can't just forward its Analytical channel
 
@@ -742,13 +769,13 @@ inputs:
     id: iis-logdrop
     streams:
       - data_stream: { dataset: iis.access }
-        paths: ['D:\LogDrop\*\IIS\*\*.log']
+        paths: ['D:\LogDrop\IIS\*\*\*.log']
 
   - type: filestream
     id: dns-logdrop
     streams:
       - data_stream: { dataset: dns.debug }
-        paths: ['D:\LogDrop\*\DNS\*\*.log']
+        paths: ['D:\LogDrop\DNS\*\*\*.log']
 ```
 
 Elastic Agent runs as a Windows service (`Elastic Agent`) once
@@ -785,17 +812,22 @@ filter {
   # so downstream filtering by criticality doesn't require re-deriving
   # it from the hostname or dataset later.
   #
-  # IIS and DNS both land under \\WEF01\LogDrop\<host>\..., so a bare
-  # /LogDrop/ match catches both and mislabels every DNS event as
-  # "iis" - match on the "IIS"/"DNS" substring instead (see the
-  # callout below for why a path-segment regex here is a trap).
+  # The drop-share layout is type-first: \\WEF01\LogDrop\IIS\<host>\...
+  # and \\WEF01\LogDrop\DNS\<host>\... - NOT <host>\IIS or <host>\DNS.
+  # That ordering is what makes the match below provably unambiguous:
+  # "LogDrop\IIS" can only ever be that fixed literal boundary, never
+  # a coincidence of some host's own name, because nothing (least of
+  # all a hostname) can appear between "LogDrop" and the type segment
+  # that immediately follows it. A bare /IIS/ or /DNS/ substring match
+  # against a host-first layout doesn't have that guarantee - see the
+  # callout below for the real, live bug that came from exactly this.
   if [event][dataset] == "windows.forwarded" {
     mutate { add_field => { "[wef][tier]" => "windows_event_forwarding" } }
   } else if [event][dataset] =~ /^syslog/ or [log][source][address] {
     mutate { add_field => { "[wef][tier]" => "syslog" } }
-  } else if [log][file][path] =~ /IIS/ {
+  } else if [log][file][path] =~ /LogDrop\\IIS/ {
     mutate { add_field => { "[wef][tier]" => "iis" } }
-  } else if [log][file][path] =~ /DNS/ {
+  } else if [log][file][path] =~ /LogDrop\\DNS/ {
     mutate { add_field => { "[wef][tier]" => "dns" } }
   }
 }
@@ -872,14 +904,37 @@ in production**:
    caught this in seconds instead of costing a live crash-and-restart
    cycle.
 
-   One tradeoff worth knowing about the substring approach: since the
-   `IIS` branch is checked first, a host literally named something
-   like `IIS-SERVER-01` would have its *DNS* logs land under
-   `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` and get mislabeled `iis`
-   anyway, because the substring match doesn't care which path segment
-   it hits. That's a hostname-naming collision to avoid, not a regex
-   problem worth re-engineering around — don't name a host `IIS-*` in
-   this lab and it never comes up.
+   A bare substring match has a real tradeoff worth naming, though: on
+   a **host-first** layout (`\\WEF01\LogDrop\<host>\IIS\...`), a host
+   literally named `IIS-SERVER-01` would have its *DNS* logs land
+   under `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` — and since the `IIS`
+   branch is checked first, that path gets mislabeled `iis` anyway,
+   because a bare `/IIS/` substring doesn't care which path segment it
+   actually hit. Hoping nobody ever names a host that way isn't a real
+   fix for a pattern other people will build from.
+
+   **The actual fix is to remove the ambiguity from the path layout
+   itself, not to patch around it in the regex**: put the type
+   *before* the hostname instead of after —
+   `\\WEF01\LogDrop\IIS\<host>\...` and `\\WEF01\LogDrop\DNS\<host>\...`
+   (this is what the drop-share layout in Phase 5 now uses). With type
+   first, `LogDrop\IIS` and `LogDrop\DNS` can only ever be that literal
+   directory boundary - no hostname, however it's spelled, can ever
+   land between `LogDrop` and the type segment that immediately
+   follows it. The filter above matches on that anchored substring
+   (`/LogDrop\\IIS/`, `/LogDrop\\DNS/`) rather than a bare `/IIS/` -
+   still a single backslash, still nowhere near the closing delimiter
+   that broke the parser earlier, but now genuinely collision-proof
+   regardless of what any host is ever named. Migrated live in this
+   build across all 9 IIS hosts and both DCs (a real, guardrail-gated
+   change on DC01/DC02 — confirmed via `--config.test_and_exit`, the
+   real `main` pipeline logging `Pipeline started`/`Pipelines running`
+   with zero errors, and fresh events landing in the new
+   `\\WEF01\LogDrop\IIS\<host>` / `\\WEF01\LogDrop\DNS\<host>` paths
+   with correct tier tags afterward) — existing files already shipped
+   under the old host-first paths were left in place rather than
+   moved, since they'd already been ingested and moving them risked
+   nothing but data loss for zero benefit.
 
 **One environment-specific gotcha worth flagging generally**: if you're
 extracting either the Elastic Agent or Logstash zip on a Windows host
@@ -1124,13 +1179,13 @@ filebeat.inputs:
   - type: filestream
     id: iis-logdrop-demo
     paths:
-      - 'D:\LogDrop\*\IIS\*\*.log'
+      - 'D:\LogDrop\IIS\*\*\*.log'
     tags: [iis, demo]
 
   - type: filestream
     id: dns-logdrop-demo
     paths:
-      - 'D:\LogDrop\*\DNS\*\*.log'
+      - 'D:\LogDrop\DNS\*\*\*.log'
     tags: [dns, demo]
 
 output.file:
