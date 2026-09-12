@@ -98,8 +98,9 @@ flowchart TB
   `OU=Servers,OU=LabOU` — adjust to whatever yours is)
 - A Linux host you can experiment with `rsyslog` on, if you want to
   follow the syslog section
-- About half a day if you're building both pipelines end to end; a few
-  hours for just one
+- About a full day if you're building both pipelines end to end, given
+  the number of gotchas documented along the way; a few hours for just
+  one
 
 ---
 
@@ -219,6 +220,76 @@ Then, per tier, a GPO linked to just that OU with:
 And a matching subscription created via `wecutil cs` with an XML
 definition scoping `AllowedSourceDomainComputers` to that tier's AD
 group (or the built-in `Domain Controllers` group for the DC tier).
+Here's the real member-server subscription from this build, with the
+group SID generalized — the DC and workstation subscriptions are the
+same shape, just a different `Query` and a different group:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Subscription xmlns="http://schemas.microsoft.com/2006/03/windows/events/subscription">
+  <SubscriptionId>WEF-MemberServers</SubscriptionId>
+  <SubscriptionType>SourceInitiated</SubscriptionType>
+  <Description>Member servers tier: System/Application errors, security logon, service-control, and Sysmon events.</Description>
+  <Enabled>true</Enabled>
+  <Uri>http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog</Uri>
+  <ConfigurationMode>Custom</ConfigurationMode>
+  <Delivery Mode="Push">
+    <Batching>
+      <MaxItems>5</MaxItems>
+      <MaxLatencyTime>60000</MaxLatencyTime>
+    </Batching>
+    <PushSettings>
+      <Heartbeat Interval="900000"/>
+    </PushSettings>
+  </Delivery>
+  <Query>
+    <![CDATA[
+      <QueryList>
+        <Query Id="0">
+          <Select Path="System">*[System[(Level=1 or Level=2) or (EventID=7034 or EventID=7040)]]</Select>
+          <Select Path="Application">*[System[(Level=1 or Level=2)]]</Select>
+          <Select Path="Security">*[System[(EventID=4624 or EventID=4625)]]</Select>
+          <Select Path="Microsoft-Windows-Sysmon/Operational">*</Select>
+        </Query>
+      </QueryList>
+    ]]>
+  </Query>
+  <ReadExistingEvents>false</ReadExistingEvents>
+  <TransportName>HTTP</TransportName>
+  <ContentFormat>RenderedText</ContentFormat>
+  <Locale Language="en-US"/>
+  <LogFile>ForwardedEvents</LogFile>
+  <PublisherName>Microsoft-Windows-EventCollector</PublisherName>
+  <AllowedSourceNonDomainComputers></AllowedSourceNonDomainComputers>
+  <AllowedSourceDomainComputers>O:NSG:NSD:(A;;GA;;;<group-SID>)</AllowedSourceDomainComputers>
+</Subscription>
+```
+
+Resolve `<group-SID>` from the AD group itself rather than typing one
+in by hand — it changes if the group is ever recreated:
+
+```powershell
+$sid = (Get-ADGroup 'WEF-MemberServers').SID.Value
+```
+
+Save the filled-in XML as `WEF-MemberServers.xml` and create the
+subscription from it:
+
+```powershell
+wecutil cs .\WEF-MemberServers.xml
+```
+
+To edit later without hand-crafting a diff, export the live
+subscription, edit the XML, then re-import — this is also the fix for
+the "stuck at the old query" symptom you'll hit if you try to edit a
+subscription's query via `wecutil ss` and it doesn't seem to take:
+
+```powershell
+wecutil gs WEF-MemberServers /f:XML > WEF-MemberServers.xml   # export current state
+# edit the file, then:
+wecutil ds WEF-MemberServers   # delete
+wecutil cs .\WEF-MemberServers.xml   # recreate
+```
 
 ### A subtle failure that looks like a permissions bug but isn't
 
@@ -248,10 +319,30 @@ of subscription scoping — the Event Forwarding Plugin's own WinRM-level
 SDDL, by default, only allows `BUILTIN\Administrators` and `BUILTIN\Event
 Log Readers`:
 
+Fix it through the `WSMan:` provider rather than editing the registry
+directly — the plugin's Security child key gets an auto-generated name
+(`Security_<random>`), so discover it instead of hardcoding it:
+
 ```powershell
-$path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WSMAN\Plugin\Event Forwarding Plugin'
-# add an (A;;GR;;;AU) ACE for Authenticated Users to the plugin's ConfigXML Sddl attribute
+$resource = Get-ChildItem 'WSMan:\localhost\Plugin\Event Forwarding Plugin\Resources' |
+    Select-Object -First 1
+$security = Get-ChildItem $resource.PSPath | Where-Object PSChildName -like 'Security_*'
+$sddlPath = Join-Path $security.PSPath 'Sddl'
+
+$currentSddl = (Get-Item $sddlPath).Value
+if ($currentSddl -notmatch ';;;AU\)') {
+    $newSddl = $currentSddl -replace 'S:P', '(A;;GR;;;AU)S:P'
+    Set-Item $sddlPath -Value $newSddl -Force
+    Restart-Service WinRM -Force
+}
 ```
+
+The default out-of-the-box SDDL looks like
+`O:NSG:BAD:P(A;;GA;;;BA)(A;;GR;;;ER)S:P(AU;FA;GA;;;WD)(AU;SA;GWGX;;;WD)`
+— note there's no `AU` (Authenticated Users) ACE in the `D:` (DACL)
+portion before `S:P` (the system audit ACL) begins. The fix above
+inserts the missing ACE right before that boundary, which is where the
+DACL always ends in this SDDL shape.
 
 ## Phase 4 — Linux and network-device syslog
 
@@ -288,6 +379,127 @@ files every few minutes (real detection latency cost), this uses a
   text-file log (`Set-DnsServerDiagnostics -EnableLoggingToFile`)
   shipped through the exact same tailer/drop-share pattern as IIS.
 
+Here's the actual tailer, unedited from this build — it runs unchanged
+on every IIS host and on the DNS servers alike, just pointed at a
+different source directory:
+
+```powershell
+# Start-LogTailer.ps1 - watches one or more directories and appends
+# newly-written bytes to a drop-share, keyed by hostname.
+param(
+    # Semicolon-delimited, not a real [string[]] - a genuine array
+    # parameter cannot survive a -File launch from Task Scheduler.
+    # Task Scheduler always starts processes from a flat command-line
+    # string (Win32 CreateProcess semantics), and PowerShell's -File
+    # argument binding does not reconstruct an array from either
+    # space-separated or comma-separated tokens on that flattened line
+    # (both were tried and silently bound only the first value) - only
+    # a single delimited string round-trips intact.
+    [Parameter(Mandatory)]
+    [string]$LogDirectoriesRaw,
+
+    [Parameter(Mandatory)]
+    [string]$DropShare
+)
+
+$LogDirectories = $LogDirectoriesRaw -split ';'
+$stateFile = 'C:\LabOps\tailer-state.json'
+$sweepIntervalSeconds = 15
+
+# Shared across the main thread and event-handler threads, so both the
+# Changed-event handler and the periodic sweep read/write the same
+# offsets without racing each other.
+$sync = [hashtable]::Synchronized(@{})
+if (Test-Path $stateFile) {
+    (Get-Content -Raw $stateFile | ConvertFrom-Json).PSObject.Properties |
+        ForEach-Object { $sync[$_.Name] = [int64]$_.Value }
+}
+
+function Copy-NewBytes {
+    param([string]$SourcePath, [string]$DropShare, [hashtable]$Sync, [string]$StateFile)
+
+    if (-not (Test-Path $SourcePath)) { return }
+
+    $file = Get-Item $SourcePath
+    $lastOffset = if ($Sync.ContainsKey($SourcePath)) { [int64]$Sync[$SourcePath] } else { 0 }
+
+    # File shrank (rotated/replaced) - start over from the top.
+    if ($file.Length -lt $lastOffset) { $lastOffset = 0 }
+    if ($file.Length -eq $lastOffset) { return }
+
+    try {
+        $siteFolder = Split-Path (Split-Path $SourcePath -Parent) -Leaf
+        $destPath = Join-Path $DropShare "$siteFolder\$($file.Name)"
+        $destDir = Split-Path $destPath -Parent
+        if (-not (Test-Path $destDir)) { New-Item -Path $destDir -ItemType Directory -Force | Out-Null }
+
+        $srcStream = [System.IO.File]::Open($SourcePath, 'Open', 'Read', 'ReadWrite')
+        $srcStream.Seek($lastOffset, 'Begin') | Out-Null
+        $newLength = $file.Length - $lastOffset
+        $buffer = New-Object byte[] $newLength
+        $srcStream.Read($buffer, 0, $newLength) | Out-Null
+        $srcStream.Close()
+
+        $destStream = [System.IO.File]::Open($destPath, 'Append', 'Write', 'Read')
+        $destStream.Write($buffer, 0, $buffer.Length)
+        $destStream.Close()
+
+        $Sync[$SourcePath] = $file.Length
+        ($Sync | ConvertTo-Json) | Set-Content -Path $StateFile -Encoding utf8
+    } catch {
+        Write-Warning "Skipped $SourcePath this pass: $($_.Exception.Message)"
+    }
+}
+
+$watchers = foreach ($dir in $LogDirectories) {
+    $w = New-Object System.IO.FileSystemWatcher($dir, '*.log')
+    $w.IncludeSubdirectories = $false
+    $w.NotifyFilter = [System.IO.NotifyFilters]'LastWrite,FileName,Size'
+    $w.EnableRaisingEvents = $true
+
+    # NOTE: the Register-ObjectEvent action block runs in the same
+    # runspace as the script that registered it - script-scope
+    # variables and functions are visible here directly. $using: does
+    # NOT apply in this context (it's only meaningful for
+    # remoting/ForEach-Object -Parallel) and throws on every event if
+    # used here - a real bug hit during this build, caught only
+    # because nothing was being copied despite the process staying
+    # alive with no visible error.
+    Register-ObjectEvent -InputObject $w -EventName Changed -Action {
+        Copy-NewBytes -SourcePath $Event.SourceEventArgs.FullPath `
+            -DropShare $DropShare -Sync $sync -StateFile $stateFile
+    } | Out-Null
+
+    $w
+}
+
+Write-Host "Tailing $($LogDirectories -join ', ') -> $DropShare"
+
+# Safety-net sweep: catches anything the Changed event missed or
+# coalesced under heavy write load - FileSystemWatcher is not 100%
+# reliable under load, so relying on it alone risks silently losing data.
+while ($true) {
+    Start-Sleep -Seconds $sweepIntervalSeconds
+    foreach ($dir in $LogDirectories) {
+        Get-ChildItem -Path $dir -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-NewBytes -SourcePath $_.FullName -DropShare $DropShare -Sync $sync -StateFile $stateFile
+        }
+    }
+}
+```
+
+Register it as an "At startup" Scheduled Task so it survives reboots
+and restarts on its own if it ever crashes:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument `
+    '-NoProfile -ExecutionPolicy Bypass -File C:\LabOps\Start-LogTailer.ps1 -LogDirectoriesRaw "C:\inetpub\logs\LogFiles\W3SVC1" -DropShare "\\WEF01\LogDrop\DEVOPS01\IIS"'
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName 'LogTailer' -Action $action -Trigger $trigger `
+    -Settings $settings -User 'SYSTEM' -RunLevel Highest
+```
+
 ### Why DNS can't just forward its Analytical channel
 
 The DNS Server's Analytical channel is a real ETW-backed Windows Event
@@ -305,6 +517,116 @@ re-enable, transparently — that isn't exposed to any external consumer,
 including WEC. If you hit this with any Analytic/Debug channel, stop
 looking for a forwarding fix and reach for the classic debug-log
 workaround instead.
+
+## Sizing and retention, with real numbers from this build
+
+Phase 1 suggested 2 vCPU / 4 GB as a starting point. In practice this
+lab's WEF01 ended up provisioned at closer to 3.2 GB, and it's been
+tight running both pipelines side by side purely for this comparison —
+if you're only running one pipeline (the realistic production choice,
+not this post's side-by-side demo), 4 GB is fine; budget 6–8 GB if you
+genuinely want both running at once the way this build does.
+
+**Disk**: the `D:` drive in this build is 60 GB, holding Logstash's
+install, both pipelines' rotating output, and the IIS/DNS drop-share.
+On a single, fairly busy day mid-build, Logstash's own file output
+(`wef-events-<date>.log`, one file per day, no cap on that file's size)
+reached **8 GB** before rolling to the next day — that number scales
+directly with source volume and how many Sysmon-generating hosts you
+have, so treat it as a starting estimate, not a hard ceiling. The two
+Beats pipelines are bounded by contrast: `rotate_every_kb: 102400` ×
+`number_of_files: 10` caps each Beat's own output at **roughly 1 GB**
+of retained history, oldest file dropped as new ones roll in. If you
+want Logstash's file output similarly bounded rather than growing
+per day, add a size-based rotation policy to it the same way, or park
+a cleanup Scheduled Task on `D:\LogstashOut\` the same way the
+drop-share needs one (see below).
+
+**Logstash's JVM heap**: this build's `jvm.options` has no explicit
+`-Xms`/`-Xmx` — Logstash computes a default from available system
+memory at startup when neither is set. On a memory-constrained VM like
+this one, don't leave that to chance: set both explicitly in
+`config/jvm.options.d/heap.options` (same value for both, so the JVM
+never has to resize its heap mid-run):
+
+```
+-Xms512m
+-Xmx512m
+```
+
+512 MB is enough for this pipeline's actual volume; raise it if you add
+enrichment filters (Phase 6's Enrichment section) or higher-volume
+sources later, and watch actual JVM memory use under load rather than
+guessing.
+
+**DNS debug logging volume**: the workaround in Phase 5 — classic
+`Set-DnsServerDiagnostics -EnableLoggingToFile` — is genuinely verbose.
+Every query gets a line, not just the interesting ones, and a busy
+resolver can produce multiple gigabytes per day. Treat it the same way
+as any other debug-level logging you'd never leave on in a
+non-troubleshooting context on a production DNS server: fine here
+because DC01/DC02 aren't under real query load, worth a second thought
+(sampling, shorter retention, or scoping to specific event categories
+via the diagnostics cmdlet's other switches) before doing the same on
+a busier resolver.
+
+**Drop-share retention**: the tailer only ever appends — it never
+deletes anything from `\\WEF01\LogDrop\`. Pair it with a separate,
+simple cleanup Scheduled Task that purges files older than a
+conservative window (24–48h is plenty, since Elastic Agent/Filebeat's
+own read-offset tracking is what actually prevents re-ingestion, not
+how long the drop-share copy survives):
+
+```powershell
+Get-ChildItem 'D:\LogDrop' -Recurse -File |
+    Where-Object LastWriteTime -lt (Get-Date).AddHours(-48) |
+    Remove-Item -Force
+```
+
+## Firewall rules, all in one place
+
+Every port this build actually needs open, gathered here instead of
+scattered across phases:
+
+**TCP 5985, inbound on WEF01** — WinRM: subscription manager + event
+push from every forwarding source.
+
+**UDP/TCP 514, inbound on WEF01** — syslog from Linux/network devices
+(Phase 4).
+
+**UDP 5514, inbound on WEF01** — Filebeat's demo syslog listener
+(Phase 6B only; skip it if you're not running the side-by-side
+comparison).
+
+**TCP 5044, loopback only on WEF01** — Beats → Logstash, never leaves
+the host.
+
+None of these need opening anywhere except WEF01 itself — every source
+machine only makes outbound connections (to push events, forward
+syslog, or write to the drop-share), so there's nothing to open on
+DC01/DC02, the member servers, or the workstations.
+
+## Production hardening (out of scope here, but worth knowing)
+
+Everything in this build is unencrypted, which is a reasonable
+trade-off in an isolated lab and not one to carry into anything
+internet-facing or handling real user data:
+
+- **WinRM** runs over plain HTTP (5985) here. Production wants HTTPS
+  (5986) with a real certificate, which also means reworking the
+  SubscriptionManager GPO value and the WinRM listener config to match.
+- **Syslog** over UDP/TCP 514 is unencrypted and, on UDP, unauthenticated
+  — anyone who can reach the port can inject events. TLS-wrapped syslog
+  (RFC 5425) or an IPsec-protected segment closes that gap.
+- **The Beats protocol** between Elastic Agent/Winlogbeat/Filebeat and
+  Logstash is loopback-only in this build, which sidesteps the problem
+  entirely — but the moment Logstash lives on a different host than its
+  shippers, that link needs TLS (`ssl_enabled` on both the beats input
+  and each shipper's output) rather than crossing a network in the
+  clear.
+
+None of this blocks anything in this guide — it's what to add before
+this pattern leaves a lab.
 
 ## Phase 6 — Shipping layer, approach A: Elastic Agent + Logstash
 
@@ -346,10 +668,50 @@ inputs:
         paths: ['D:\LogDrop\*\DNS\*\*.log']
 ```
 
+Elastic Agent runs as a Windows service (`Elastic Agent`) once
+installed — the standalone install places its binary and this config
+at `C:\Program Files\Elastic\Agent\elastic-agent.yml`. Standalone mode
+needs no separate "enrollment" step the way Fleet-managed agents do:
+drop the config in place and (re)start the service, and it starts
+running the inputs defined in the file immediately —
+`elastic-agent.exe status` should report `(HEALTHY) Running` with
+`fleet (STOPPED, Not enrolled)`, which is expected and correct for this
+mode, not an error to chase.
+
 Logstash's own pipeline, for now, is deliberately boring: `beats` input
 on 5044 → a `file` output with size-based rotation. That output stanza
 is the one thing that changes when Kafka exists later — nothing
-upstream of it needs to know or care.
+upstream of it needs to know or care. Here's the actual pipeline file
+from this build (`config/wef01-pipeline.conf`, referenced from
+`pipelines.yml` the normal Logstash way):
+
+```
+input {
+  beats {
+    port => 5044
+  }
+}
+
+filter {
+  # Tier tagging: which collection path this event arrived through,
+  # so downstream filtering by criticality doesn't require re-deriving
+  # it from the hostname or dataset later.
+  if [event][dataset] == "windows.forwarded" {
+    mutate { add_field => { "[wef][tier]" => "windows_event_forwarding" } }
+  } else if [event][dataset] =~ /^syslog/ or [log][source][address] {
+    mutate { add_field => { "[wef][tier]" => "syslog" } }
+  } else if [log][file][path] =~ /LogDrop/ {
+    mutate { add_field => { "[wef][tier]" => "iis" } }
+  }
+}
+
+output {
+  file {
+    path => "D:/LogstashOut/wef-events-%{+YYYY-MM-dd}.log"
+    codec => json_lines
+  }
+}
+```
 
 **One environment-specific gotcha worth flagging generally**: if you're
 extracting either the Elastic Agent or Logstash zip on a Windows host
@@ -419,8 +781,12 @@ about what gets collected.
 ### Step 1 — Download matching versions
 
 Match whatever Elastic stack version you're already running elsewhere
-in the environment — mixing major versions across your Elastic tooling
-is asking for subtle incompatibilities later.
+in the environment — Elastic ships Elasticsearch, Kibana, Elastic
+Agent, Logstash, and every Beat on the same version train (they're all
+`9.5.3` in this build, matching the Elastic Agent + Logstash pair from
+Phase 6), so "the stack version" and "the Beats version" are the same
+number. Mixing major versions across your Elastic tooling is asking
+for subtle incompatibilities later.
 
 ```powershell
 $version = '9.5.3'
@@ -508,6 +874,21 @@ through the Elastic Agent pipeline:
 ```json
 {"@timestamp":"2026-09-12T07:59:15.505Z","winlog":{"channel":"Microsoft-Windows-Sysmon/Operational","event_id":"12", ...},"tags":["forwarded","wef"], ...}
 ```
+
+Sysmon isn't the only thing riding this channel, and it's worth
+confirming a non-Sysmon event looks right too — here's a real Security
+4624 (successful logon) from `SQL02`, forwarded the same way, with the
+verbose `message` field trimmed for space:
+
+```json
+{"@timestamp":"2026-09-12T19:51:58.501Z","winlog":{"channel":"Security","event_id":"4624","provider_name":"Microsoft-Windows-Security-Auditing","computer_name":"SQL02.myhomelab.hv.lab","event_data":{"TargetUserName":"MECM01$","TargetDomainName":"MYHOMELAB","LogonType":"3","IpAddress":"-"}},"event":{"outcome":"success","action":"Logon","code":"4624"},"host":{"name":"SQL02.myhomelab.hv.lab"},"tags":["forwarded","wef"]}
+```
+
+Same shape either way: `winlog.channel` and `winlog.event_id` tell you
+what happened, `host.name` (or `winlog.computer_name` — see the Phase
+7 field-name warning above) tells you where, and `tags` confirms it
+rode the forwarding pipeline rather than something read directly off
+WEF01's own local logs.
 
 ### Step 4 — Filebeat config: syslog, IIS, and DNS
 
@@ -702,9 +1083,63 @@ instead of staring at a YAML file that was never the problem.
 - **Good first pipeline to learn on**: if you want the simplest possible mental model — one Beat, one job
 
 Both are legitimate answers to "how do I ship these logs somewhere."
-The right one depends on whether you need Logstash's enrichment power
-and Fleet's centralized management, or whether the fastest path to
-"data is moving" matters more than that flexibility.
+If you want it as a decision rather than a table to weigh yourself:
+
+- **You're the only person who'll ever touch this, and you want to
+  understand every byte** → Winlogbeat + Filebeat.
+- **You have a team, you'll add more sources over time, and you want
+  central config management** → Elastic Agent + Logstash.
+- **You already run Fleet somewhere else in your environment** →
+  Elastic Agent, so this pipeline can join the same fleet later instead
+  of being a permanent outlier.
+- **You're air-gapped, resource-constrained, or can't justify running a
+  JVM for this** → Winlogbeat + Filebeat.
+
+## Common failure modes, quick reference
+
+Everything below was a real symptom hit during this build. If you're
+troubleshooting either pipeline, check here before diving deep — the
+fix is usually smaller than the symptom suggests.
+
+**`Get-WinEvent -ListLog` on a Sysmon channel returns "log not found"**
+- Cause: wrong channel name — `Sysinternals-Sysmon` instead of `Sysmon`
+- Fix: `wevtutil el | Select-String Sysmon` to get the real name
+
+**Subscription forwards everything except Sysmon; WSMan fault 1818**
+- Cause: Sysmon's channel ACL has no `NETWORK SERVICE` grant
+- Fix: ACL fix in Phase 2
+
+**New group member gets "Access is denied" (WSMan fault 5) on a subscription that already works for others**
+- Cause: Kerberos ticket predates the group membership change
+- Fix: reboot the machine, then `wecutil rs`
+
+**Every non-admin source gets "Access is denied" reaching the collector at all**
+- Cause: Event Forwarding Plugin's own WinRM SDDL has no `Authenticated Users` ACE
+- Fix: SDDL fix in Phase 3
+
+**DNS Analytical channel can't be queried or subscribed to while enabled**
+- Cause: direct-channel type; no external consumer can touch it live
+- Fix: debug text-file logging instead (Phase 5)
+
+**Logstash/Beats output file looks frozen at some old size for hours**
+- Cause: `Get-ChildItem` metadata lags an actively-written file
+- Fix: `Get-Content -Tail` the actual file instead
+
+**Searching for a source hostname in Logstash's output finds nothing**
+- Cause: wrong field — `hostname` is always the agent host, not the source
+- Fix: search `winlog.computer_name` instead
+
+**Zip extraction for Elastic Agent/Logstash crawls for hours**
+- Cause: Defender real-time scanning every extracted file
+- Fix: exclude the path first, use `ZipFile.ExtractToDirectory`
+
+**Filebeat logs `"DEPRECATED: Syslog input"` on startup**
+- Cause: using the built-in `syslog` input type
+- Fix: switch to `udp`/`tcp` input + `syslog` processor
+
+**Two shippers pointed at the same UDP port both fail to bind**
+- Cause: only one process can own a UDP port for receiving at a time
+- Fix: pick different ports, or stop one before testing the other
 
 ## What's next
 
