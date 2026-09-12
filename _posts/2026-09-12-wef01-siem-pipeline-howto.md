@@ -681,15 +681,33 @@ instead of staring at a YAML file that was never the problem.
 
 ## Comparing the two, now that you've built both
 
-| | Elastic Agent + Logstash | Winlogbeat + Filebeat |
-|---|---|---|
-| Processes to manage | 2 (Agent, Logstash) | 2 (Winlogbeat, Filebeat) |
-| Config surface | One YAML per input type, one Logstash pipeline file | One YAML per Beat |
-| Centralized management later (Fleet) | Built in, if you ever stand up Fleet/Kibana | Not available — no shared control plane |
-| Resource footprint | Logstash's JVM is the heaviest single piece either way | Slightly lighter without Logstash's JVM, if you skip enrichment |
-| Enrichment/routing before Kafka | Logstash filters (dissect, aggregate, ECS mapping) — genuinely powerful | Each Beat's own lighter processor set — less flexible, usually enough for straightforward shipping |
-| Kafka cutover later | Swap Logstash's one output stanza | Swap each Beat's one output stanza |
-| Good first pipeline to learn on | If you already know you'll want Logstash-side enrichment | If you want the simplest possible mental model — one Beat, one job |
+**Processes to manage**
+- Elastic Agent + Logstash: 2 (Agent, Logstash)
+- Winlogbeat + Filebeat: 2 (Winlogbeat, Filebeat)
+
+**Config surface**
+- Elastic Agent + Logstash: one YAML per input type, plus one Logstash pipeline file
+- Winlogbeat + Filebeat: one YAML per Beat
+
+**Centralized management later (Fleet)**
+- Elastic Agent + Logstash: built in, if you ever stand up Fleet/Kibana
+- Winlogbeat + Filebeat: not available — no shared control plane
+
+**Resource footprint**
+- Elastic Agent + Logstash: Logstash's JVM is the heaviest single piece either way
+- Winlogbeat + Filebeat: slightly lighter without Logstash's JVM, if you skip enrichment
+
+**Enrichment/routing before Kafka**
+- Elastic Agent + Logstash: Logstash filters (dissect, aggregate, ECS mapping) — genuinely powerful
+- Winlogbeat + Filebeat: each Beat's own lighter processor set — less flexible, usually enough for straightforward shipping
+
+**Kafka cutover later**
+- Elastic Agent + Logstash: swap Logstash's one output stanza
+- Winlogbeat + Filebeat: swap each Beat's one output stanza
+
+**Good first pipeline to learn on**
+- Elastic Agent + Logstash: if you already know you'll want Logstash-side enrichment
+- Winlogbeat + Filebeat: if you want the simplest possible mental model — one Beat, one job
 
 Both are legitimate answers to "how do I ship these logs somewhere."
 The right one depends on whether you need Logstash's enrichment power
