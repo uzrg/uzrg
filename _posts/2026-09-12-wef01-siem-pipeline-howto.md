@@ -642,6 +642,43 @@ $udp.Send($bytes, $bytes.Length, '127.0.0.1', 5514) | Out-Null
 $udp.Close()
 ```
 
+### A standalone listener, for when you need to rule out the shipper entirely
+
+The test packet above proves Filebeat received something, but if it
+*doesn't* show up, you're left guessing whether the problem is the
+network path, a firewall rule, or Filebeat's own config. A tiny
+standalone UDP listener — no Beats, no Elastic Agent, nothing but raw
+.NET sockets — answers "is anything even arriving on this port at all"
+on its own, which cuts that guesswork in half:
+
+```powershell
+# Stop Filebeat first (or use a different port) - only one process can
+# bind a given UDP port for receiving at a time.
+$listener = New-Object System.Net.Sockets.UdpClient(5514)
+$remoteEndpoint = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+
+Write-Host "Listening on UDP/5514 - Ctrl+C to stop"
+try {
+    while ($true) {
+        $bytes = $listener.Receive([ref]$remoteEndpoint)
+        $text  = [System.Text.Encoding]::ASCII.GetString($bytes)
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] from $($remoteEndpoint.Address): $text"
+    }
+}
+finally {
+    $listener.Close()
+}
+```
+
+Run this on WEF01 in place of Filebeat, then fire the same test-packet
+snippet from above (or point a real syslog sender at it) from another
+machine. If the message shows up here, the network path and firewall
+rule are both fine and any remaining problem is in Filebeat's own
+input config — a smaller, more specific thing to debug than "syslog
+isn't working." If it doesn't show up, you've just ruled Filebeat out
+entirely and can go straight to checking routing and firewall rules
+instead of staring at a YAML file that was never the problem.
+
 ## Comparing the two, now that you've built both
 
 | | Elastic Agent + Logstash | Winlogbeat + Filebeat |
