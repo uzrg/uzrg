@@ -131,6 +131,14 @@ being edited again later.
   the repo's `sysmonconfig-with-filedelete.xml` variant for the added
   file-delete visibility. Pin the exact commit you pull the config
   from, same as you'd pin the Sysmon binary version.
+  One thing to know before building that dissect: the subscriptions in
+  Phase 3 use `<ContentFormat>RenderedText</ContentFormat>`, which
+  delivers Sysmon's `RuleName` field embedded inside the rendered
+  message text rather than as its own structured field — so the
+  ATT&CK-label dissect is a text-parsing step against `message`, not a
+  simple field reference. `RenderedEvents` (structured XML) is the
+  alternative if you'd rather work with `RuleName` as a real field, at
+  the cost of needing to parse that XML shape downstream instead.
 - **Deployment mechanism**: whatever your lab already uses for
   software rollout (this lab used MECM, since that was already the
   established pattern). The two things that matter are (a) pin
@@ -290,6 +298,26 @@ wecutil gs WEF-MemberServers /f:XML > WEF-MemberServers.xml   # export current s
 wecutil ds WEF-MemberServers   # delete
 wecutil cs .\WEF-MemberServers.xml   # recreate
 ```
+
+`wecutil gs .../f:XML` is also the safest way to build the *other* two
+tiers' subscriptions in the first place: rather than hand-typing the
+`AllowedSourceDomainComputers` SDDL and hoping the format is right (a
+malformed SDDL string fails at `wecutil cs` with an error that won't
+tell you which part is wrong), create your first subscription, export
+it, and use that as the literal template for the next one — you know
+the SDDL shape is correct because Windows itself just normalized it
+into that exact string.
+
+The three tiers' queries genuinely differ, not just cosmetically — the
+DC tier pulls Kerberos/account-management-relevant events a member
+server wouldn't generate meaningfully (`4672` privilege use, `4720`/
+`4722`/`4724`/`4738` account changes, `4662` directory object access,
+plus the whole `Directory Service` log and, once enabled, DNS's
+Analytical channel) alongside the same base logon events; the
+workstation tier stays deliberately narrow — logon events plus
+Sysmon — since endpoint telemetry is what matters there, not
+account-management noise a workstation rarely generates in the first
+place.
 
 ### A subtle failure that looks like a permissions bug but isn't
 
@@ -521,11 +549,17 @@ workaround instead.
 ## Sizing and retention, with real numbers from this build
 
 Phase 1 suggested 2 vCPU / 4 GB as a starting point. In practice this
-lab's WEF01 ended up provisioned at closer to 3.2 GB, and it's been
-tight running both pipelines side by side purely for this comparison —
-if you're only running one pipeline (the realistic production choice,
-not this post's side-by-side demo), 4 GB is fine; budget 6–8 GB if you
-genuinely want both running at once the way this build does.
+lab's WEF01 is provisioned with roughly 3.2 GB total — under the 4 GB
+suggested above, not "3.2 GB used out of 4 GB." That gap mattered: it's
+part of why Logstash's JVM ran out of heap for real during this build
+(see the heap section below) once WEF01 picked up its own MECM/SCOM
+monitoring agents on top of everything else running here. If you're
+only running one pipeline (the realistic production choice, not this
+post's side-by-side demo), match the VM's actual provisioned memory to
+4 GB as originally suggested rather than assuming it landed there;
+budget 6–8 GB if you genuinely want both pipelines running at once the
+way this build does, especially once the box is itself a monitored
+endpoint generating its own telemetry.
 
 **Disk**: the `D:` drive in this build is 60 GB, holding Logstash's
 install, both pipelines' rotating output, and the IIS/DNS drop-share.
@@ -542,22 +576,51 @@ per day, add a size-based rotation policy to it the same way, or park
 a cleanup Scheduled Task on `D:\LogstashOut\` the same way the
 drop-share needs one (see below).
 
-**Logstash's JVM heap**: this build's `jvm.options` has no explicit
-`-Xms`/`-Xmx` — Logstash computes a default from available system
-memory at startup when neither is set. On a memory-constrained VM like
-this one, don't leave that to chance: set both explicitly in
-`config/jvm.options.d/heap.options` (same value for both, so the JVM
-never has to resize its heap mid-run):
+**Logstash's JVM heap — this one is a real incident, not a
+hypothetical**: this build's `jvm.options` originally had no explicit
+`-Xms`/`-Xmx`, defaulting to 1 GB. That default genuinely ran out —
+`java.lang.OutOfMemoryError: Java heap space`, fatal on both pipeline
+worker threads, Logstash dead — once WEF01's own Sysmon volume spiked
+after the MECM/SCOM agents landed on WEF01 itself (see "What's next"):
+a box that's also a monitored endpoint generates its own Sysmon
+telemetry on top of everything it's collecting from the rest of the
+fleet, and 1 GB wasn't enough headroom for that combined load. The
+practical lesson: don't treat a heap-sizing recommendation (including
+this post's own numbers) as fixed — watch actual JVM memory under real
+load and raise it before you hit the wall, not after Logstash has
+already gone down silently for hours (`Get-Process java` still showed
+a running process throughout; only the log's `FATAL` entries revealed
+anything was wrong — another entry for the "status ≠ actually working"
+pile this whole build keeps adding to).
+
+Set the heap directly in `config/jvm.options` (note: a separate
+`jvm.options.d/heap.options` file did **not** get picked up in this
+Logstash build — verify your version actually reads that directory
+before relying on it, and check with the real running process's
+command line, not just the file you wrote):
 
 ```
--Xms512m
--Xmx512m
+-Xms1536m
+-Xmx1536m
 ```
 
-512 MB is enough for this pipeline's actual volume; raise it if you add
-enrichment filters (Phase 6's Enrichment section) or higher-volume
-sources later, and watch actual JVM memory use under load rather than
-guessing.
+1536 MB comfortably covers this pipeline's real volume including the
+Sysmon spike that caused the original crash; raise it further if you
+add enrichment filters (Phase 6's Enrichment section) or higher-volume
+sources later. Confirm the value actually took effect by checking the
+live process, not the config file:
+
+```powershell
+(Get-CimInstance Win32_Process -Filter "Name='java.exe'").CommandLine
+```
+
+And validate any config change before restarting the real service —
+this would have caught the parser-breaking regex above in seconds
+instead of costing a crash-and-restart cycle:
+
+```powershell
+& 'D:\Logstash\bin\logstash.bat' -f 'D:\Logstash\config\wef01-pipeline.conf' --config.test_and_exit
+```
 
 **DNS debug logging volume**: the workaround in Phase 5 — classic
 `Set-DnsServerDiagnostics -EnableLoggingToFile` — is genuinely verbose.
@@ -604,7 +667,23 @@ the host.
 None of these need opening anywhere except WEF01 itself — every source
 machine only makes outbound connections (to push events, forward
 syslog, or write to the drop-share), so there's nothing to open on
-DC01/DC02, the member servers, or the workstations.
+DC01/DC02, the member servers, or the workstations. Outbound 5985 from
+each source is what actually carries that traffic, and it's usually
+allowed by default on a Windows host firewall — but if yours is locked
+down more tightly than the out-of-the-box profile, confirm outbound
+5985 explicitly rather than assuming it's open just because inbound is
+covered on WEF01's side.
+
+One more thing worth knowing if WinRM has never been touched on
+WEF01 before this build: `winrm quickconfig -force` (Phase 3) is what
+actually binds the WinRM listener to the network interface in the
+first place — a fresh Windows install has WinRM's *service* running,
+but its listener defaults to effectively loopback-only until
+`quickconfig` (or the equivalent GPO-driven listener creation) creates
+a real HTTP listener and opens the matching firewall rule. Running
+`wecutil qc` alone, without `winrm quickconfig`, is a common way to end
+up with a subscription that looks correctly configured but has no
+listener for anything to actually reach.
 
 ## Production hardening (out of scope here, but worth knowing)
 
@@ -681,9 +760,14 @@ mode, not an error to chase.
 Logstash's own pipeline, for now, is deliberately boring: `beats` input
 on 5044 → a `file` output with size-based rotation. That output stanza
 is the one thing that changes when Kafka exists later — nothing
-upstream of it needs to know or care. Here's the actual pipeline file
-from this build (`config/wef01-pipeline.conf`, referenced from
-`pipelines.yml` the normal Logstash way):
+upstream of it needs to know or care. This build's scheduled task
+launches Logstash with `-f D:\Logstash\config\wef01-pipeline.conf`
+directly — a real gotcha in its own right: passing `-f` on the command
+line makes Logstash **ignore `pipelines.yml` entirely** (it logs
+`Ignoring the 'pipelines.yml' file because command line options are
+specified`), so if you're used to multi-pipeline setups via
+`pipelines.yml`, a single `-f` flag silently overrides that whole
+mechanism rather than adding to it.
 
 ```
 input {
@@ -696,12 +780,19 @@ filter {
   # Tier tagging: which collection path this event arrived through,
   # so downstream filtering by criticality doesn't require re-deriving
   # it from the hostname or dataset later.
+  #
+  # IIS and DNS both land under \\WEF01\LogDrop\<host>\..., so a bare
+  # /LogDrop/ match catches both and mislabels every DNS event as
+  # "iis" - match on the "IIS"/"DNS" substring instead (see the
+  # callout below for why a path-segment regex here is a trap).
   if [event][dataset] == "windows.forwarded" {
     mutate { add_field => { "[wef][tier]" => "windows_event_forwarding" } }
   } else if [event][dataset] =~ /^syslog/ or [log][source][address] {
     mutate { add_field => { "[wef][tier]" => "syslog" } }
-  } else if [log][file][path] =~ /LogDrop/ {
+  } else if [log][file][path] =~ /IIS/ {
     mutate { add_field => { "[wef][tier]" => "iis" } }
+  } else if [log][file][path] =~ /DNS/ {
+    mutate { add_field => { "[wef][tier]" => "dns" } }
   }
 }
 
@@ -712,6 +803,42 @@ output {
   }
 }
 ```
+
+Verify a filter like this against a real event before trusting it —
+don't assume a field name matches what a plugin's docs say without
+checking. A one-line `stdout { codec => rubydebug }` output alongside
+(or instead of) the file output for a few seconds shows you the exact
+field structure Logstash is actually working with:
+
+```
+output {
+  stdout { codec => rubydebug }
+}
+```
+
+**Two real bugs were found in this exact filter, one of them live and
+in production**:
+
+1. **The tier-tagging logic above originally matched a bare
+   `/LogDrop/` regex**, which catches both IIS and DNS paths (they
+   both live under `\\WEF01\LogDrop\<host>\...`) and mislabeled every
+   DNS event as `"iis"`. This ran unnoticed in production for a full
+   day before being caught — a good argument for actually querying
+   your tagged data occasionally rather than assuming a filter you
+   wrote once still does what you think.
+2. **The first attempt to fix it made things worse.** A path-segment
+   regex like `/LogDrop\\[^\\]+\\IIS\\/` — matching a literal backslash
+   right up against the closing `/` delimiter — broke Logstash's own
+   config parser (`LogStash::ConfigurationError`, "Expected one of
+   [...] after filter {"), and since a pipeline that fails to compile
+   makes Logstash exit entirely, this took the *whole pipeline* down,
+   not just the tier-tagging feature. The bare substring match
+   (`/IIS/`, `/DNS/`) above sidesteps the entire escaping problem and
+   is simpler besides — when a regex only needs to find a substring,
+   don't reach for a more "precise" pattern that adds an escaping trap
+   for no real benefit. `--config.test_and_exit` (below) would have
+   caught this in seconds instead of costing a live crash-and-restart
+   cycle.
 
 **One environment-specific gotcha worth flagging generally**: if you're
 extracting either the Elastic Agent or Logstash zip on a Windows host
