@@ -711,11 +711,6 @@ and Fleet's centralized management, or whether the fastest path to
 - Kafka doesn't exist in this lab yet — both pipelines above are built
   with that swap in mind, but until it's real, "local rotating file" is
   the actual, load-bearing output for both.
-- The Sysmon misdiagnosis in Phase 2 above is the short version; the
-  full story — an entire session's worth of Defender exclusions,
-  manifest re-registration attempts, and template-corruption theories,
-  all chasing a channel name that was simply wrong — is enough of a
-  cautionary tale to be worth its own post later.
 - If you build the Winlogbeat/Filebeat pipeline as your only pipeline
   rather than side by side with Elastic Agent, you can drop the demo
   port (5514) and repoint your real syslog senders directly at
