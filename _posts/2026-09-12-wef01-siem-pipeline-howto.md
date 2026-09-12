@@ -51,9 +51,12 @@ Forwarding subscription or an Elastic Beats pipeline before.
 ## Architecture
 
 ```
-  Domain Controllers OU  --[GPO: WEF-Forwarding-DCs]-->              \
-  Servers OU             --[GPO: WEF-Forwarding-MemberServers]-->     WEF01
-  Workstations OU        --[GPO: WEF-Forwarding-Workstations]-->     /(ForwardedEvents)
+  Domain Controllers OU  --[GPO: WEF-Forwarding-DCs]-----------+
+  Servers OU             --[GPO: WEF-Forwarding-MemberServers]-+
+  Workstations OU        --[GPO: WEF-Forwarding-Workstations]--+
+                                                                |
+                                                                v
+                                               WEF01 (ForwardedEvents channel)
 
   UBUNTU01 / future Linux, pfSense / network devices
       --[rsyslog / syslog]-->  WEF01
@@ -398,7 +401,9 @@ files every few minutes (real detection latency cost), this uses a
   Logstash tier-tagging filter in Phase 6 provably unambiguous
   regardless of what any given host is named (see that section for
   why hostname-first ordering is a real trap, not just a style
-  choice).
+  choice). If a host runs more than one instance of this tailer — DC01
+  here, tailing both IIS and DNS — each instance needs its own state
+  file, not the shared default (see the real bug that caused, below).
 - Run it as a Scheduled Task, "At startup," restart-on-failure.
 - DNS's live Analytical channel turns out to be a dead end for
   forwarding — see the callout below — so DNS uses the classic debug
@@ -871,14 +876,20 @@ is exactly what the filter's first condition checks:
 }
 ```
 
-(Both fields carry the same value here, which is what actually
-resolved the concern — but don't take that as a universal guarantee
-for every Elastic Agent version or input type. If your own
-`rubydebug` output shows the value only under `data_stream.dataset`
-and `event.dataset` is empty or absent, change the filter's condition
-to `[data_stream][dataset] == "windows.forwarded"` instead — the
-`stdout` output above is exactly how you'd catch that before it ships,
-not after.)
+(This excerpt is literal, not illustrative — copied from a real event
+this build's `winlog` input actually produced, both fields carrying the
+identical unnamespaced value shown above. If you've worked with ECS
+data streams before, that might look surprising: `data_stream.dataset`
+is more commonly namespaced or suffixed rather than an exact copy of
+`event.dataset`. Take it as what *this* Elastic Agent version and input
+type did in *this* build, not a documented ECS guarantee — which is
+the whole reason to check your own `rubydebug` output rather than
+trust either this excerpt or the plugin's docs. If your own output
+shows the value only under `data_stream.dataset` and `event.dataset`
+is empty or absent, change the filter's condition to
+`[data_stream][dataset] == "windows.forwarded"` instead — the `stdout`
+output above is exactly how you'd catch that before it ships, not
+after.)
 
 **This exact filter went through three real, live findings before
 landing where it is now** — not a hypothetical example, an actual
@@ -897,13 +908,15 @@ history:
    config parser (`LogStash::ConfigurationError`, "Expected one of
    [...] after filter {"), and since a pipeline that fails to compile
    makes Logstash exit entirely, this took the *whole pipeline* down,
-   not just the tier-tagging feature. The bare substring match
-   (`/IIS/`, `/DNS/`) above sidesteps the entire escaping problem and
-   is simpler besides — when a regex only needs to find a substring,
+   not just the tier-tagging feature. A bare substring match
+   (`/IIS/`, `/DNS/`) sidesteps the entire escaping problem and is
+   simpler besides — when a regex only needs to find a substring,
    don't reach for a more "precise" pattern that adds an escaping trap
    for no real benefit. `--config.test_and_exit` (below) would have
    caught this in seconds instead of costing a live crash-and-restart
-   cycle.
+   cycle. That bare-substring version isn't what ships, though — it
+   traded the escaping bug for a different collision problem, fixed in
+   finding 3 below. Don't stop reading here and adopt it as-is.
 3. **The bare substring fix still had a real tradeoff, caught in
    review rather than in production.** On a **host-first** layout
    (`\\WEF01\LogDrop\<host>\IIS\...`), a host literally named
@@ -1347,7 +1360,7 @@ instead of staring at a YAML file that was never the problem.
 - **Config surface**: one YAML per Beat
 - **Centralized management later (Fleet)**: not available — no shared control plane
 - **Resource footprint**: slightly lighter without Logstash's JVM, if you skip enrichment
-- **Enrichment/routing before Kafka**: each Beat's own lighter processor set — less flexible, usually enough for straightforward shipping
+- **Enrichment/routing before Kafka**: each Beat's own lighter processor set — less flexible, usually enough for straightforward shipping; see Enrichment above for a concrete example (the ATT&CK dissect) of the kind of multi-stage text parsing a Beat's processor set isn't really built for
 - **Kafka cutover later**: swap each Beat's one output stanza
 - **Good first pipeline to learn on**: if you want the simplest possible mental model — one Beat, one job
 
