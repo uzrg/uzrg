@@ -711,6 +711,15 @@ and Fleet's centralized management, or whether the fastest path to
 - Kafka doesn't exist in this lab yet — both pipelines above are built
   with that swap in mind, but until it's real, "local rotating file" is
   the actual, load-bearing output for both.
+- WEF01 now has the MECM client and SCOM agent installed, the same way
+  every other server in this lab does — a log collector that nobody's
+  watching is just a second thing that can silently fail. Next is
+  adding it to the SUPERLAB monitoring dashboard with checks specific
+  to what this box actually does: all four shipper services (Elastic
+  Agent, Logstash, Winlogbeat, Filebeat) actually running rather than
+  just installed, and subscription health — events-per-second per WEC
+  subscription, so a tier going quiet shows up as a graph dropping to
+  zero instead of a discovery made by "check on it" days later.
 - If you build the Winlogbeat/Filebeat pipeline as your only pipeline
   rather than side by side with Elastic Agent, you can drop the demo
   port (5514) and repoint your real syslog senders directly at
