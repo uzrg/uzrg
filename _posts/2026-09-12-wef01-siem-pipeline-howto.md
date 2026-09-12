@@ -51,35 +51,30 @@ Forwarding subscription or an Elastic Beats pipeline before.
 ## Architecture
 
 ```
-  Domain Controllers OU   --[GPO: WEF-Forwarding-DCs]-->            \
-  Servers OU              --[GPO: WEF-Forwarding-MemberServers]-->   WEF01's
-  Workstations OU         --[GPO: WEF-Forwarding-Workstations]-->   /ForwardedEvents
-                                                                      channel
-  UBUNTU01 / future Linux --[rsyslog, UDP]------------------------->   |
-  pfSense / network devices --[syslog]------------------------------> |
-                                                                       |
-  IIS-hosting servers      --[FileSystemWatcher tail]--\              |
-  DC01 / DC02 DNS debug logs --[debug text log tail]---->  \\WEF01\LogDrop
-                                                              |
-                                                              |
-              +-----------------------------------------------------+
-              |         WEF01 shipping layer, built two ways         |
-              |                                                       |
-              |   Pipeline A                    Pipeline B            |
-              |   Elastic Agent                 Winlogbeat            |
-              |       |                             |                 |
-              |       v                             v                 |
-              |   Logstash                   rotating file output     |
-              |       |                                               |
-              |       v                     Filebeat                  |
-              |  rotating file output           |                     |
-              |                                 v                     |
-              |                          rotating file output         |
-              +-----------------------------------------------------+
-                       |                              |
-                       v                              v
-                (swap point)                   (swap point)
-                Kafka (later)                  Kafka (later)
+  Domain Controllers OU  --[GPO: WEF-Forwarding-DCs]-->              \
+  Servers OU             --[GPO: WEF-Forwarding-MemberServers]-->     WEF01
+  Workstations OU        --[GPO: WEF-Forwarding-Workstations]-->     /(ForwardedEvents)
+
+  UBUNTU01 / future Linux, pfSense / network devices
+      --[rsyslog / syslog]-->  WEF01
+
+  IIS-hosting servers, DC01 / DC02 DNS debug logs
+      --[FileSystemWatcher tail]-->  \\WEF01\LogDrop\<host>\...
+
+                              |
+                              v
+             WEF01's shipping layer, built two independent ways:
+
+               Pipeline A:  Elastic Agent -> Logstash -> file output
+               Pipeline B:  Winlogbeat ----------------> file output
+                            Filebeat ------------------> file output
+
+                              |
+                              v
+                    swap point, once it exists
+                              |
+                              v
+                        Kafka (later)
 ```
 
 ## Prerequisites
