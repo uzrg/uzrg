@@ -8,19 +8,21 @@ pin: false
 mermaid: false
 ---
 
-# A step-by-step guide: Windows Event Forwarding + a SIEM-shaped pipeline, built two different ways
+# A step-by-step guide: Windows Event Forwarding + a SIEM-bound pipeline, built two different ways
 
-Every server in SUPERLAB up to this point has kept its own Event Log,
-its own IIS log files, its own DNS debug output — useful if you already
-know which machine to look at, useless if you don't. This guide builds
-`WEF01`, a single collector that every domain-joined Windows machine
-forwards its events to natively, extended to also pull in Linux syslog
-and file-based logs (IIS, DNS) that Windows Event Forwarding itself
-can't reach.
+Every server in SUPERLAB up to this point has kept its own Event Logs,
+its own IIS log files, its own DNS debug output — what's lacking is a
+mechanism to centralize event logs into a single place to give some
+overall visibility. Various SIEM products provide that capability, and
+more, but how do the logs get there? This guide builds `WEF01`, a
+single collector that every domain-joined Windows machine forwards its
+events to natively, extended to also pull in Linux syslog and
+file-based logs (IIS, DNS) that Windows Event Forwarding itself can't
+handle.
 
-Then it builds the same pipeline a second time, with different tools,
-specifically so you can compare them side by side. That second build is
-the real point of this post: if you're a junior engineer handed either
+Then it builds the same pipeline a second time, with a different set
+of tools, specifically so you can compare them side by side. That
+second build is the real point of this post: if you're handed either
 "stand up centralized logging with Elastic Agent" or "stand up
 centralized logging with Winlogbeat and Filebeat," you should be able
 to follow this guide and end up with a working pipeline either way —
@@ -39,8 +41,9 @@ Forwarding subscription or an Elastic Beats pipeline before.
   those same subscriptions
 - Linux syslog (and, separately, network-device syslog) landing on the
   same collector
-- IIS and DNS logs — both file-based, neither reachable by native Event
-  Forwarding — shipped through a near-real-time file-tailing pattern
+- IIS and DNS logs — both file-based, neither supported by Windows
+  Event Forwarding — here they are shipped through a custom built,
+  near-real-time file-tailing pattern
 - **Two parallel, independently working shipping pipelines** on WEF01
   itself: one built on Elastic Agent + Logstash, one built on
   Winlogbeat + Filebeat, both writing to local rotating files with a
@@ -84,14 +87,15 @@ Forwarding subscription or an Elastic Beats pipeline before.
 
 - A Hyper-V host with an existing AD domain, at least one reachable DC
 - A template VM you can clone Windows Server from (see this lab's own
-  generalized-template post if you need one)
+  [generalized-template post]({% post_url 2026-07-13-phase1-plumbing-and-template %}) if you need one)
 - An OU structure to place computer/group objects into (this lab uses
   `OU=Servers,OU=LabOU` — adjust to whatever yours is)
 - A Linux host you can experiment with `rsyslog` on, if you want to
   follow the syslog section
-- About a full day if you're building both pipelines end to end, given
-  the number of gotchas documented along the way; a few hours for just
-  one
+- Set aside real time for this — building both pipelines end to end
+  takes meaningfully longer than just one, given the number of gotchas
+  documented along the way, and how long either takes depends a lot on
+  your own pace and background
 
 ---
 
@@ -100,12 +104,13 @@ Forwarding subscription or an Elastic Beats pipeline before.
 Nothing special here beyond your normal VM build: clone from template,
 join the domain, land the computer object in your servers OU (not the
 default `CN=Computers` container — new AD objects should always go
-somewhere deliberate). Give it a second data disk (`D:`) — you'll want
-somewhere other than the OS disk for log output, the IIS/DNS drop
-share, and eventually Logstash's own install.
+somewhere deliberate, and btw you probably remember that you can't
+link GPOs to those built-in containers...!). Give it a second data
+disk (`D:`) — you'll want somewhere other than the OS disk for log
+output, the IIS/DNS drop share, and eventually Logstash's own install.
 
 Sizing: 2 vCPU / 4 GB is enough to start. The JVM inside Logstash is
-the single biggest memory cost in either pipeline; watch it if you add
+the single biggest memory hog in either pipeline; watch it if you add
 volume later.
 
 ## Phase 2 — Sysmon, fleet-wide, with ATT&CK labels
@@ -116,7 +121,8 @@ being edited again later.
 
 - **Config choice**: [Olaf Hartong's `sysmon-modular`](https://github.com/olafhartong/sysmon-modular)
   over the more common SwiftOnSecurity baseline, specifically because
-  it embeds MITRE ATT&CK Tactic/Technique IDs directly into each rule's
+  it embeds [MITRE ATT&CK](https://attack.mitre.org/) Tactic/Technique
+  IDs directly into each rule's
   name — a simple field dissect downstream gets you structured
   `attack.tactic` / `attack.technique` fields for free. This lab used
   the repo's `sysmonconfig-with-filedelete.xml` variant for the added
@@ -191,7 +197,7 @@ locally as Administrator/SYSTEM but a service or subscription can't
 consume it, look at what identity that service actually runs as, and
 diff its permissions against something that already works. That
 technique found this in minutes once applied; guessing at "maybe the
-config is wrong" or "maybe reinstall it" cost a lot more time first.
+config is wrong" or "maybe reinstall it" cost a lot more time!
 
 ## Phase 3 — The collector role, three GPOs, three subscriptions
 
@@ -211,7 +217,7 @@ Then, per tier, a GPO linked to just that OU with:
 
 - Computer Config → Admin Templates → Windows Components → Event
   Forwarding → **Configure target Subscription Manager**:
-  `Server=http://WEF01.yourdomain.tld:5985/wsman/SubscriptionManager/WEC,Refresh=900`
+  `Server=http://WEF01.myhomelab.hv.lab:5985/wsman/SubscriptionManager/WEC,Refresh=900`
 - Computer Config → Admin Templates → Windows Components → Windows
   Remote Management (WinRM) → WinRM Service → **Allow remote server
   management through WinRM**: Enabled
@@ -221,7 +227,8 @@ definition scoping `AllowedSourceDomainComputers` to that tier's AD
 group (or the built-in `Domain Controllers` group for the DC tier).
 Here's the real member-server subscription from this build, with the
 group SID generalized — the DC and workstation subscriptions are the
-same shape, just a different `Query` and a different group:
+same shape, just a different `Query` and a different group. Save this
+as `WEF-MemberServers-template.xml`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -260,19 +267,23 @@ same shape, just a different `Query` and a different group:
   <LogFile>ForwardedEvents</LogFile>
   <PublisherName>Microsoft-Windows-EventCollector</PublisherName>
   <AllowedSourceNonDomainComputers></AllowedSourceNonDomainComputers>
-  <AllowedSourceDomainComputers>O:NSG:NSD:(A;;GA;;;<group-SID>)</AllowedSourceDomainComputers>
+  <AllowedSourceDomainComputers>O:NSG:NSD:(A;;GA;;;$sid)</AllowedSourceDomainComputers>
 </Subscription>
 ```
 
-Resolve `<group-SID>` from the AD group itself rather than typing one
-in by hand — it changes if the group is ever recreated:
+`$sid` there is a literal placeholder in the file — it doesn't resolve
+itself. Pull the real SID from the AD group rather than typing one in
+by hand (it changes if the group is ever recreated), then substitute
+it into the template before saving the file `wecutil` will actually
+read:
 
 ```powershell
 $sid = (Get-ADGroup 'WEF-MemberServers').SID.Value
+(Get-Content 'WEF-MemberServers-template.xml' -Raw) -replace '\$sid', $sid |
+    Set-Content 'WEF-MemberServers.xml'
 ```
 
-Save the filled-in XML as `WEF-MemberServers.xml` and create the
-subscription from it:
+Create the subscription from the filled-in file:
 
 ```powershell
 wecutil cs .\WEF-MemberServers.xml
@@ -302,13 +313,25 @@ into that exact string.
 The three tiers' queries genuinely differ, not just cosmetically — the
 DC tier pulls Kerberos/account-management-relevant events a member
 server wouldn't generate meaningfully (`4672` privilege use, `4720`/
-`4722`/`4724`/`4738` account changes, `4662` directory object access,
-plus the whole `Directory Service` log and, once enabled, DNS's
-Analytical channel) alongside the same base logon events; the
-workstation tier stays deliberately narrow — logon events plus
-Sysmon — since endpoint telemetry is what matters there, not
-account-management noise a workstation rarely generates in the first
-place.
+`4722`/`4724`/`4738` account changes, `4662` directory object access —
+the [Windows Security Log Encyclopedia](https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/default.aspx)
+is a genuinely useful reference for what any Security event ID actually
+means, rather than guessing from the number alone — plus the whole
+`Directory Service` log and, once enabled, DNS's Analytical channel)
+alongside the same base logon events; the workstation tier stays
+deliberately narrow — logon events plus Sysmon — since endpoint
+telemetry is what matters there, not account-management noise a
+workstation rarely generates in the first place.
+
+These queries are sized for a homelab, not a production fleet — a
+real environment with thousands of member servers and workstations
+will generate far more volume against even this "narrow" set than this
+build ever sees. Expect to spend real time tuning each tier's query
+against your own actual event volume before this scales past a
+handful of hosts: narrowing `LogonType` values, excluding known-noisy
+service accounts, or dropping an event class entirely once you've
+confirmed nobody's actually
+consuming it downstream.
 
 ### A subtle failure that looks like a permissions bug but isn't
 
@@ -371,7 +394,7 @@ WEF01:
 
 ```
 # /etc/rsyslog.d/90-wef01.conf on the Linux host
-*.* @wef01.yourdomain.tld:514   # single @ = UDP, matching WEF01's udp input in Phase 6
+*.* @wef01.myhomelab.hv.lab:514   # single @ = UDP, matching WEF01's udp input in Phase 6
 ```
 
 This build's collector side listens on UDP specifically (Phase 6's
@@ -387,10 +410,11 @@ whoever owns it, not something to make unilaterally.
 
 ## Phase 5 — File-based logs: IIS and DNS, near-real time
 
-Windows Event Forwarding can't reach IIS log files or DNS's debug text
+Windows Event Forwarding can't handle IIS log files or DNS's debug text
 log — they're not Event Log channels. Rather than polling for rotated
 files every few minutes (real detection latency cost), this uses a
-`FileSystemWatcher`-based tailer that reacts to writes as they happen:
+custom built `FileSystemWatcher`-based tailer that reacts to writes as
+they happen:
 
 - IIS opens its log files with share-read access, so the currently
   active file can be tailed while IIS is still writing to it.
@@ -580,57 +604,70 @@ workaround instead.
 
 ## Sizing and retention, with real numbers from this build
 
-Phase 1 suggested 2 vCPU / 4 GB as a starting point. In practice this
-lab's WEF01 is provisioned with roughly 3.2 GB total — under the 4 GB
-suggested above, not "3.2 GB used out of 4 GB." That gap mattered: it's
-part of why Logstash's JVM ran out of heap for real during this build
-(see the heap section below) once WEF01 picked up its own MECM/SCOM
-monitoring agents on top of everything else running here. If you're
-only running one pipeline (the realistic production choice, not this
-post's side-by-side demo), match the VM's actual provisioned memory to
-4 GB as originally suggested rather than assuming it landed there;
-budget 6–8 GB if you genuinely want both pipelines running at once the
-way this build does, especially once the box is itself a monitored
-endpoint generating its own telemetry.
+Phase 1 suggested 2 vCPU / 4 GB as a starting point. Double-check that
+the VM actually got that — this lab's WEF01 ended up provisioned with
+only about 3.2 GB total, not the full 4 GB, and nobody caught the gap
+until it mattered: it's a real contributor to the Logstash heap crash
+covered below, once WEF01 picked up its own MECM/SCOM monitoring
+agents on top of everything else already running on it.
 
-**Disk**: the `D:` drive in this build is 60 GB, holding Logstash's
-install, both pipelines' rotating output, and the IIS/DNS drop-share.
-On a single, fairly busy day mid-build, Logstash's own file output
-(`wef-events-<date>.log`, one file per day, no cap on that file's size)
-reached **8 GB** before rolling to the next day — that number scales
-directly with source volume and how many Sysmon-generating hosts you
-have, so treat it as a starting estimate, not a hard ceiling. The two
-Beats pipelines are bounded by contrast: `rotate_every_kb: 102400` ×
-`number_of_files: 10` caps each Beat's own output at **roughly 1 GB**
-of retained history, oldest file dropped as new ones roll in. If you
-want Logstash's file output similarly bounded rather than growing
-per day, add a size-based rotation policy to it the same way, or park
-a cleanup Scheduled Task on `D:\LogstashOut\` the same way the
-drop-share needs one (see below).
+Size it for what you're actually running, and verify the allocation
+rather than trust the request:
+- **Single pipeline** (the realistic production deployment): 4 GB is
+  fine. Confirm it — don't take it on faith the way this build did.
+- **Both pipelines concurrently**, as in this comparison build: budget
+  6–8 GB. The box is also a monitored endpoint generating its own
+  Sysmon/agent telemetry on top of everything it's ingesting from the
+  rest of the fleet, and that overhead is not optional.
 
-**Logstash's JVM heap — this one is a real incident, not a
-hypothetical**: this build's `jvm.options` originally had no explicit
-`-Xms`/`-Xmx`, defaulting to 1 GB. That default genuinely ran out —
-`java.lang.OutOfMemoryError: Java heap space`, fatal on both pipeline
-worker threads, Logstash dead — once WEF01's own Sysmon volume spiked
-after the MECM/SCOM agents landed on WEF01 itself (see "What's next"):
-a box that's also a monitored endpoint generates its own Sysmon
-telemetry on top of everything it's collecting from the rest of the
-fleet, and 1 GB wasn't enough headroom for that combined load. The
-practical lesson: don't treat a heap-sizing recommendation (including
-this post's own numbers) as fixed — watch actual JVM memory under real
-load and raise it before you hit the wall, not after Logstash has
-already gone down silently for hours (`Get-Process java` still showed
-a running process throughout; only the log's `FATAL` entries revealed
-anything was wrong — another entry for the "status ≠ actually working"
-pile this whole build keeps adding to).
+**Disk**: `D:` is 60 GB in this build — Logstash's install, both
+pipelines' rotating output, and the IIS/DNS drop-share all share it.
+The two output styles behave very differently, and only one of them is
+actually bounded:
 
-Set the heap directly in `config/jvm.options` (note: a separate
+- **Logstash's file output is unbounded.** `wef-events-<date>.log`
+  rotates daily, not by size, and nothing caps how large that single
+  file gets in between. On a busy day mid-build it hit **8 GB** before
+  rolling over — that's a data point tied to this build's source
+  volume and Sysmon-host count, not a ceiling you can plan against
+  directly. Measure your own volume before sizing the disk.
+- **The Beats outputs are bounded.** `rotate_every_kb: 102400` ×
+  `number_of_files: 10` caps each Beat's retained history at roughly
+  **1 GB**, oldest file dropped automatically as new ones roll in.
+
+Don't leave Logstash's side open-ended: add the same kind of
+size-based rotation to its file output, or put a cleanup Scheduled
+Task on `D:\LogstashOut\` — the drop-share needs one regardless (see
+below), so this is the same maintenance task applied to a second
+directory, not new work.
+
+**Logstash's JVM heap — a real incident, not a hypothetical.** This
+build's `jvm.options` shipped with no explicit `-Xms`/`-Xmx`, so it
+defaulted to 1 GB. That default ran out for real:
+`java.lang.OutOfMemoryError: Java heap space`, both pipeline worker
+threads dead, Logstash down — triggered once WEF01's own Sysmon volume
+spiked after the MECM/SCOM agents landed on the box itself (see "What's
+next"). A monitored endpoint generates its own telemetry on top of
+whatever it's collecting from the rest of the fleet, and 1 GB wasn't
+enough headroom for both loads at once.
+
+Two things worth taking from this, not just the number:
+
+- **Don't treat any heap-sizing recommendation — including this
+  post's own — as fixed.** Watch actual JVM memory under real load and
+  raise it before you hit the wall, not after.
+- **The crash was silent.** `Get-Process java` kept showing a live
+  process the entire time Logstash was down; only the log's `FATAL`
+  entries said anything was wrong. Same lesson this build keeps
+  repeating: a process existing is not the same claim as a process
+  working.
+
+Set the heap directly in `config/jvm.options`. A separate
 `jvm.options.d/heap.options` file did **not** get picked up in this
 Logstash build — verify your version actually reads that directory
-before relying on it, and check with the real running process's
-command line, not just the file you wrote). Append these two lines at
-the **end** of the existing file rather than editing near the top —
+before relying on it, and confirm against the running process's
+command line, not the file you wrote. Append these two lines at the
+**end** of the existing file rather than editing near the top —
 `jvm.options` ships with a long list of other flags and commented-out
 defaults, and there's no reason to disturb any of them just to add a
 heap override:
@@ -640,41 +677,41 @@ heap override:
 -Xmx1536m
 ```
 
-1536 MB comfortably covers this pipeline's real volume including the
-Sysmon spike that caused the original crash; raise it further if you
-add enrichment filters (see Enrichment below) or higher-volume sources
-later. Confirm the value actually took effect by checking the live
-process, not the config file:
+1536 MB covers this pipeline's real volume, Sysmon spike included.
+Raise it further if you add enrichment filters (see Enrichment below)
+or take on higher-volume sources. Confirm the value actually took
+effect against the live process — not the config file:
 
 ```powershell
 (Get-CimInstance Win32_Process -Filter "Name='java.exe'").CommandLine
 ```
 
-And validate any config change before restarting the real service —
-this would have caught the parser-breaking regex above in seconds
-instead of costing a crash-and-restart cycle:
+Validate any config change before restarting the real service. This
+alone would have caught the parser-breaking regex above in seconds,
+instead of a live crash-and-restart cycle:
 
 ```powershell
 & 'D:\Logstash\bin\logstash.bat' -f 'D:\Logstash\config\wef01-pipeline.conf' --config.test_and_exit
 ```
 
-**DNS debug logging volume**: the workaround in Phase 5 — classic
-`Set-DnsServerDiagnostics -EnableLoggingToFile` — is genuinely verbose.
-Every query gets a line, not just the interesting ones, and a busy
-resolver can produce multiple gigabytes per day. Treat it the same way
-as any other debug-level logging you'd never leave on in a
-non-troubleshooting context on a production DNS server: fine here
-because DC01/DC02 aren't under real query load, worth a second thought
-(sampling, shorter retention, or scoping to specific event categories
-via the diagnostics cmdlet's other switches) before doing the same on
-a busier resolver.
+**DNS debug logging volume.** Phase 5's workaround — classic
+`Set-DnsServerDiagnostics -EnableLoggingToFile` — is verbose by
+design: every query gets a line, not just the interesting ones, and a
+busy resolver produces multiple gigabytes a day of it. Treat it as
+what it is — debug-level logging you'd never leave running on a
+production DNS server outside a troubleshooting window. It's fine here
+because DC01/DC02 aren't under real query load. On a busier resolver,
+don't just flip it on the same way — scope it down first: sample
+instead of capturing everything, shorten retention, or restrict to
+specific event categories via the diagnostics cmdlet's other switches.
 
-**Drop-share retention**: the tailer only ever appends — it never
-deletes anything from `\\WEF01\LogDrop\`. Pair it with a separate,
-simple cleanup Scheduled Task that purges files older than a
-conservative window (24–48h is plenty, since Elastic Agent/Filebeat's
-own read-offset tracking is what actually prevents re-ingestion, not
-how long the drop-share copy survives):
+**Drop-share retention.** The tailer only ever appends — it never
+deletes anything from `\\WEF01\LogDrop\`, and it's not meant to. Pair
+it with a separate, dedicated cleanup Scheduled Task that purges
+anything older than a conservative window. 24–48h is plenty: what
+actually prevents re-ingestion is Elastic Agent/Filebeat's own
+read-offset tracking, not how long the drop-share copy sticks around,
+so don't over-retain it out of caution.
 
 ```powershell
 Get-ChildItem 'D:\LogDrop' -Recurse -File |
@@ -684,67 +721,64 @@ Get-ChildItem 'D:\LogDrop' -Recurse -File |
 
 ## Firewall rules, all in one place
 
-Every port this build actually needs open, gathered here instead of
-scattered across phases:
+Every port this build needs open, in one place instead of scattered
+across phases:
 
-**TCP 5985, inbound on WEF01** — WinRM: subscription manager + event
-push from every forwarding source.
+**TCP 5985, inbound on WEF01** — WinRM. Subscription manager plus
+event push from every forwarding source.
 
-**UDP 514, inbound on WEF01** — syslog from Linux/network devices
-(Phase 4). Only UDP is actually used anywhere in this build (Phase 4's
-sender config and Phase 6's collector input are both UDP) — open TCP
-514 too only if you know a specific sender needs it.
+**UDP 514, inbound on WEF01** — syslog from Linux and network devices
+(Phase 4). Only UDP is used anywhere in this build — Phase 4's sender
+config and Phase 6's collector input are both UDP. Open TCP 514 too
+only if a specific sender actually needs it; don't open it by default.
 
 **UDP 5514, inbound on WEF01** — Filebeat's demo syslog listener
-(Phase 6B only; skip it if you're not running the side-by-side
-comparison).
+(Phase 6B only). Skip it if you're not running the side-by-side
+comparison.
 
-**TCP 5044, loopback only on WEF01** — Beats → Logstash, never leaves
+**TCP 5044, loopback only on WEF01** — Beats to Logstash. Never leaves
 the host.
 
-None of these need opening anywhere except WEF01 itself — every source
-machine only makes outbound connections (to push events, forward
-syslog, or write to the drop-share), so there's nothing to open on
-DC01/DC02, the member servers, or the workstations. Outbound 5985 from
-each source is what actually carries that traffic, and it's usually
-allowed by default on a Windows host firewall — but if yours is locked
-down more tightly than the out-of-the-box profile, confirm outbound
-5985 explicitly rather than assuming it's open just because inbound is
-covered on WEF01's side.
+That's it — nothing else needs a rule anywhere. Every source machine
+only makes outbound connections (pushing events, forwarding syslog,
+writing to the drop-share), so DC01/DC02, the member servers, and the
+workstations need nothing opened at all. Outbound 5985 is what
+actually carries that traffic from each source, and it's allowed by
+default on a stock Windows firewall — but if yours is locked down past
+the out-of-the-box profile, verify outbound 5985 explicitly. Inbound
+being covered on WEF01's side proves nothing about outbound elsewhere.
 
-One more thing worth knowing if WinRM has never been touched on
-WEF01 before this build: `winrm quickconfig -force` (Phase 3) is what
-actually binds the WinRM listener to the network interface in the
-first place — a fresh Windows install has WinRM's *service* running,
-but its listener defaults to effectively loopback-only until
-`quickconfig` (or the equivalent GPO-driven listener creation) creates
-a real HTTP listener and opens the matching firewall rule. Running
-`wecutil qc` alone, without `winrm quickconfig`, is a common way to end
-up with a subscription that looks correctly configured but has no
+One thing to know if WinRM has never been touched on WEF01 before this
+build: `winrm quickconfig -force` (Phase 3) is what binds the WinRM
+listener to the network interface in the first place. A fresh Windows
+install has the WinRM *service* running, but its listener stays
+effectively loopback-only until `quickconfig` — or the equivalent
+GPO-driven listener creation — opens a real HTTP listener and the
+matching firewall rule. Run `wecutil qc` without `winrm quickconfig`
+and you'll get a subscription that looks correctly configured with no
 listener for anything to actually reach.
 
 ## Production hardening (out of scope here, but worth knowing)
 
-Everything in this build is unencrypted, which is a reasonable
-trade-off in an isolated lab and not one to carry into anything
-internet-facing or handling real user data:
+Everything here is unencrypted. That's an acceptable trade-off in an
+isolated lab; it is not one to carry into anything internet-facing or
+handling real user data:
 
-- **WinRM** runs over plain HTTP (5985) here. Production wants HTTPS
-  (5986) with a real certificate, which also means reworking the
+- **WinRM** runs over plain HTTP (5985). Production wants HTTPS (5986)
+  with a real certificate — which also means reworking the
   SubscriptionManager GPO value and the WinRM listener config to match.
-- **Syslog** over UDP 514 (what this build actually uses) is
-  unencrypted and unauthenticated — anyone who can reach the port can
-  inject events. TLS-wrapped syslog (RFC 5425, which runs over TCP,
-  not UDP) or an IPsec-protected segment closes that gap.
+- **Syslog** over UDP 514 is unencrypted and unauthenticated. Anyone
+  who can reach the port can inject events. Close that gap with
+  TLS-wrapped syslog (RFC 5425, which runs over TCP, not UDP) or an
+  IPsec-protected segment.
 - **The Beats protocol** between Elastic Agent/Winlogbeat/Filebeat and
-  Logstash is loopback-only in this build, which sidesteps the problem
-  entirely — but the moment Logstash lives on a different host than its
-  shippers, that link needs TLS (`ssl_enabled` on both the beats input
-  and each shipper's output) rather than crossing a network in the
-  clear.
+  Logstash is loopback-only here, which sidesteps the problem entirely.
+  The moment Logstash lives on a different host than its shippers,
+  that link needs TLS (`ssl_enabled` on both the beats input and each
+  shipper's output) — not a plaintext hop across the network.
 
-None of this blocks anything in this guide — it's what to add before
-this pattern leaves a lab.
+None of this blocks anything in this guide. It's the list to work
+through before this pattern leaves a lab.
 
 ## Phase 6 — Shipping layer, approach A: Elastic Agent + Logstash
 
@@ -786,27 +820,27 @@ inputs:
         paths: ['D:\LogDrop\DNS\*\*\*.log']
 ```
 
-Elastic Agent runs as a Windows service (`Elastic Agent`) once
-installed — the standalone install places its binary and this config
-at `C:\Program Files\Elastic\Agent\elastic-agent.yml`. Standalone mode
-needs no separate "enrollment" step the way Fleet-managed agents do:
-drop the config in place and (re)start the service, and it starts
-running the inputs defined in the file immediately —
-`elastic-agent.exe status` should report `(HEALTHY) Running` with
-`fleet (STOPPED, Not enrolled)`, which is expected and correct for this
-mode, not an error to chase.
+Elastic Agent installs as a Windows service (`Elastic Agent`), binary
+and config landing at
+`C:\Program Files\Elastic\Agent\elastic-agent.yml`. Standalone mode
+skips the "enrollment" step Fleet-managed agents require entirely:
+drop the config in place, (re)start the service, and it runs the
+inputs defined in the file immediately. `elastic-agent.exe status`
+should report `(HEALTHY) Running` with `fleet (STOPPED, Not
+enrolled)` — that's the expected, correct state for this mode, not an
+error to chase.
 
-Logstash's own pipeline, for now, is deliberately boring: `beats` input
-on 5044 → a `file` output with size-based rotation. That output stanza
-is the one thing that changes when Kafka exists later — nothing
-upstream of it needs to know or care. This build's scheduled task
-launches Logstash with `-f D:\Logstash\config\wef01-pipeline.conf`
-directly — a real gotcha in its own right: passing `-f` on the command
-line makes Logstash **ignore `pipelines.yml` entirely** (it logs
-`Ignoring the 'pipelines.yml' file because command line options are
-specified`), so if you're used to multi-pipeline setups via
-`pipelines.yml`, a single `-f` flag silently overrides that whole
-mechanism rather than adding to it.
+Logstash's own pipeline stays deliberately boring: `beats` input on
+5044, `file` output with size-based rotation. That output stanza is
+the one thing that changes when Kafka exists later — nothing upstream
+of it needs to know or care. One real gotcha in how it's launched: this
+build's scheduled task runs Logstash with
+`-f D:\Logstash\config\wef01-pipeline.conf` directly, and passing `-f`
+on the command line makes Logstash **ignore `pipelines.yml`
+entirely** (it logs `Ignoring the 'pipelines.yml' file because command
+line options are specified`). If you're used to multi-pipeline setups
+via `pipelines.yml`, know that a single `-f` flag overrides that whole
+mechanism instead of adding to it.
 
 ```
 input {
@@ -848,11 +882,11 @@ output {
 }
 ```
 
-Verify a filter like this against a real event before trusting it —
-don't assume a field name matches what a plugin's docs say without
-checking. A one-line `stdout { codec => rubydebug }` output alongside
-(or instead of) the file output for a few seconds shows you the exact
-field structure Logstash is actually working with:
+Verify a filter like this against a real event before trusting it.
+Don't assume a field name matches what a plugin's docs say — check. A
+one-line `stdout { codec => rubydebug }` output, alongside or instead
+of the file output, shows the exact field structure Logstash is
+actually working with in a few seconds:
 
 ```
 output {
@@ -860,10 +894,10 @@ output {
 }
 ```
 
-A genuinely healthy Windows-forwarded event's `rubydebug` output for
-this build looks like the excerpt below — `event.dataset` (not
-`data_stream.dataset`) really is where `windows.forwarded` lives, which
-is exactly what the filter's first condition checks:
+A genuinely healthy Windows-forwarded event's `rubydebug` output looks
+like the excerpt below. `event.dataset` — not `data_stream.dataset` —
+is where `windows.forwarded` actually lives, which is exactly what the
+filter's first condition checks:
 
 ```ruby
 {
@@ -880,87 +914,84 @@ is exactly what the filter's first condition checks:
 ```
 
 (This excerpt is literal, not illustrative — copied from a real event
-this build's `winlog` input actually produced, both fields carrying the
+this build's `winlog` input produced, both fields carrying the
 identical unnamespaced value shown above. If you've worked with ECS
-data streams before, that might look surprising: `data_stream.dataset`
-is more commonly namespaced or suffixed rather than an exact copy of
-`event.dataset`. Take it as what *this* Elastic Agent version and input
-type did in *this* build, not a documented ECS guarantee — which is
-the whole reason to check your own `rubydebug` output rather than
-trust either this excerpt or the plugin's docs. If your own output
-shows the value only under `data_stream.dataset` and `event.dataset`
-is empty or absent, change the filter's condition to
+data streams before, that should look surprising: `data_stream.dataset`
+is normally namespaced or suffixed, not an exact copy of
+`event.dataset`. Take it as what *this* Elastic Agent version and
+input type did in *this* build — not a documented ECS guarantee. That
+gap is exactly why you check your own `rubydebug` output instead of
+trusting either this excerpt or the plugin's docs. If yours shows the
+value only under `data_stream.dataset`, with `event.dataset` empty or
+absent, change the filter's condition to
 `[data_stream][dataset] == "windows.forwarded"` instead — the `stdout`
-output above is exactly how you'd catch that before it ships, not
-after.)
+output above is how you catch that before it ships, not after.)
 
 **This exact filter went through three real, live findings before
 landing where it is now** — not a hypothetical example, an actual
 history:
 
 1. **The tier-tagging logic above originally matched a bare
-   `/LogDrop/` regex**, which catches both IIS and DNS paths (they
-   both live under `\\WEF01\LogDrop\<host>\...`) and mislabeled every
-   DNS event as `"iis"`. This ran unnoticed in production for a full
-   day before being caught — a good argument for actually querying
-   your tagged data occasionally rather than assuming a filter you
-   wrote once still does what you think.
+   `/LogDrop/` regex.** It catches both IIS and DNS paths — they both
+   live under `\\WEF01\LogDrop\<host>\...` — and mislabeled every DNS
+   event as `"iis"`. This ran unnoticed in production for a full day.
+   Lesson: query your tagged data occasionally. Don't assume a filter
+   you wrote once still does what you think.
 2. **The first attempt to fix it made things worse.** A path-segment
-   regex like `/LogDrop\\[^\\]+\\IIS\\/` — matching a literal backslash
-   right up against the closing `/` delimiter — broke Logstash's own
-   config parser (`LogStash::ConfigurationError`, "Expected one of
-   [...] after filter {"), and since a pipeline that fails to compile
-   makes Logstash exit entirely, this took the *whole pipeline* down,
-   not just the tier-tagging feature. A bare substring match
-   (`/IIS/`, `/DNS/`) sidesteps the entire escaping problem and is
-   simpler besides — when a regex only needs to find a substring,
-   don't reach for a more "precise" pattern that adds an escaping trap
-   for no real benefit. `--config.test_and_exit` (below) would have
-   caught this in seconds instead of costing a live crash-and-restart
-   cycle. That bare-substring version isn't what ships, though — it
-   traded the escaping bug for a different collision problem, fixed in
-   finding 3 below. Don't stop reading here and adopt it as-is.
+   regex like `/LogDrop\\[^\\]+\\IIS\\/` — a literal backslash right
+   up against the closing `/` delimiter — broke Logstash's own config
+   parser (`LogStash::ConfigurationError`, "Expected one of [...]
+   after filter {"). A pipeline that fails to compile exits entirely,
+   so this took the *whole pipeline* down, not just the tier-tagging
+   feature. A bare substring match (`/IIS/`, `/DNS/`) sidesteps the
+   escaping problem and is simpler besides — when a regex only needs
+   to find a substring, don't reach for a more "precise" pattern that
+   adds an escaping trap for no real benefit. `--config.test_and_exit`
+   (below) would have caught this in seconds instead of a live
+   crash-and-restart cycle. That bare-substring version isn't what
+   ships, though — it traded the escaping bug for a different
+   collision problem, fixed in finding 3 below. Don't stop reading
+   here and adopt it as-is.
 3. **The bare substring fix still had a real tradeoff, caught in
    review rather than in production.** On a **host-first** layout
    (`\\WEF01\LogDrop\<host>\IIS\...`), a host literally named
    `IIS-SERVER-01` would have its *DNS* logs land under
-   `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...` — and since the `IIS` branch
-   is checked first, that path gets mislabeled `iis` anyway, because a
-   bare `/IIS/` substring doesn't care which path segment it actually
-   hit. Hoping nobody ever names a host that way isn't a real fix for a
+   `\\WEF01\LogDrop\IIS-SERVER-01\DNS\...`. Since the `IIS` branch is
+   checked first, that path gets mislabeled `iis` anyway — a bare
+   `/IIS/` substring doesn't care which path segment it actually hit.
+   Hoping nobody ever names a host that way isn't a real fix for a
    pattern other people will build from.
 
-   **The actual fix is to remove the ambiguity from the path layout
-   itself, not to patch around it in the regex**: put the type
-   *before* the hostname instead of after —
-   `\\WEF01\LogDrop\IIS\<host>\...` and `\\WEF01\LogDrop\DNS\<host>\...`
-   (this is what the drop-share layout in Phase 5 now uses). With type
-   first, `LogDrop\IIS` and `LogDrop\DNS` can only ever be that literal
-   directory boundary - no hostname, however it's spelled, can ever
-   land between `LogDrop` and the type segment that immediately
-   follows it. The filter above matches on that anchored substring
-   (`/LogDrop\\IIS/`, `/LogDrop\\DNS/`) rather than a bare `/IIS/` -
+   **The actual fix removes the ambiguity from the path layout itself
+   — it doesn't patch around it in the regex.** Put the type *before*
+   the hostname instead of after: `\\WEF01\LogDrop\IIS\<host>\...` and
+   `\\WEF01\LogDrop\DNS\<host>\...` (what the Phase 5 drop-share layout
+   uses now). With type first, `LogDrop\IIS` and `LogDrop\DNS` can only
+   ever be that literal directory boundary — no hostname, however it's
+   spelled, can land between `LogDrop` and the type segment right
+   after it. The filter matches that anchored substring
+   (`/LogDrop\\IIS/`, `/LogDrop\\DNS/`) instead of a bare `/IIS/` —
    still a single backslash, still nowhere near the closing delimiter
-   that broke the parser earlier, but now genuinely collision-proof
-   regardless of what any host is ever named. Migrated live in this
-   build across all 9 IIS hosts and both DCs (a real, guardrail-gated
-   change on DC01/DC02 — confirmed via `--config.test_and_exit`, the
-   real `main` pipeline logging `Pipeline started`/`Pipelines running`
-   with zero errors, and fresh events landing in the new
+   that broke the parser earlier, but genuinely collision-proof now
+   regardless of what any host is named. Migrated live across all 9
+   IIS hosts and both DCs — a real, guardrail-gated change on
+   DC01/DC02, confirmed via `--config.test_and_exit`, the real `main`
+   pipeline logging `Pipeline started`/`Pipelines running` with zero
+   errors, and fresh events landing in the new
    `\\WEF01\LogDrop\IIS\<host>` / `\\WEF01\LogDrop\DNS\<host>` paths
-   with correct tier tags afterward) — existing files already shipped
-   under the old host-first paths were left in place rather than
-   moved, since they'd already been ingested and moving them risked
-   nothing but data loss for zero benefit.
+   with correct tier tags afterward. Files already shipped under the
+   old host-first paths stayed put rather than getting moved — they'd
+   already been ingested, and moving them risked data loss for zero
+   benefit.
 
-**One environment-specific gotcha worth flagging generally**: if you're
-extracting either the Elastic Agent or Logstash zip on a Windows host
-with Defender's real-time scanning on, expect extraction to crawl —
-Defender scanning every one of the thousands of small files inside a
-JVM-bundled package is a well-known performance killer. An extraction
-exclusion for the install path, plus using .NET's
+**One environment-specific gotcha worth flagging generally**: extracting
+either the Elastic Agent or Logstash zip on a Windows host with
+Defender's real-time scanning on will crawl. Defender scanning every
+one of the thousands of small files inside a JVM-bundled package is a
+well-known performance killer. An extraction exclusion for the install
+path, plus .NET's
 `[System.IO.Compression.ZipFile]::ExtractToDirectory` instead of
-`Expand-Archive`, turned a stalled multi-hour extraction into a
+`Expand-Archive`, turns a stalled multi-hour extraction into a
 few-second one.
 
 ## Enrichment: ATT&CK labels from Sysmon rule names
@@ -1129,7 +1160,7 @@ output.file:
 # swap point as Logstash's output in the other pipeline.
 #
 # output.kafka:
-#   hosts: ["kafka01.yourdomain.tld:9092"]
+#   hosts: ["kafka01.myhomelab.hv.lab:9093", "kafka02.myhomelab.hv.lab:9093", "kafka03.myhomelab.hv.lab:9093"]
 #   topic: "wef01-winlogbeat-events"
 #   partition.round_robin:
 #     reachable_only: false
@@ -1213,7 +1244,7 @@ output.file:
 
 # --- Kafka placeholder --------------------------------------------
 # output.kafka:
-#   hosts: ["kafka01.yourdomain.tld:9092"]
+#   hosts: ["kafka01.myhomelab.hv.lab:9093", "kafka02.myhomelab.hv.lab:9093", "kafka03.myhomelab.hv.lab:9093"]
 #   topic: "wef01-filebeat-events"
 #   partition.round_robin:
 #     reachable_only: false
