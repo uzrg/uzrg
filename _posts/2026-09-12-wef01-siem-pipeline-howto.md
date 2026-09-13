@@ -690,8 +690,10 @@ scattered across phases:
 **TCP 5985, inbound on WEF01** — WinRM: subscription manager + event
 push from every forwarding source.
 
-**UDP/TCP 514, inbound on WEF01** — syslog from Linux/network devices
-(Phase 4).
+**UDP 514, inbound on WEF01** — syslog from Linux/network devices
+(Phase 4). Only UDP is actually used anywhere in this build (Phase 4's
+sender config and Phase 6's collector input are both UDP) — open TCP
+514 too only if you know a specific sender needs it.
 
 **UDP 5514, inbound on WEF01** — Filebeat's demo syslog listener
 (Phase 6B only; skip it if you're not running the side-by-side
@@ -730,9 +732,10 @@ internet-facing or handling real user data:
 - **WinRM** runs over plain HTTP (5985) here. Production wants HTTPS
   (5986) with a real certificate, which also means reworking the
   SubscriptionManager GPO value and the WinRM listener config to match.
-- **Syslog** over UDP/TCP 514 is unencrypted and, on UDP, unauthenticated
-  — anyone who can reach the port can inject events. TLS-wrapped syslog
-  (RFC 5425) or an IPsec-protected segment closes that gap.
+- **Syslog** over UDP 514 (what this build actually uses) is
+  unencrypted and unauthenticated — anyone who can reach the port can
+  inject events. TLS-wrapped syslog (RFC 5425, which runs over TCP,
+  not UDP) or an IPsec-protected segment closes that gap.
 - **The Beats protocol** between Elastic Agent/Winlogbeat/Filebeat and
   Logstash is loopback-only in this build, which sidesteps the problem
   entirely — but the moment Logstash lives on a different host than its
@@ -1423,7 +1426,7 @@ fix is usually smaller than the symptom suggests.
 - Cause: only one process can own a UDP port for receiving at a time
 - Fix: pick different ports, or stop one before testing the other
 
-**A DNS event is tagged `iis` (or vice versa) even after the tier-tagging fix**
+**A DNS event is tagged `iis` (or vice versa) despite substring matching on the tier segment**
 - Cause: host-first drop-share layout (`LogDrop\<host>\IIS`) lets a
   host's own name collide with the other type's substring match
 - Fix: type-first layout (`LogDrop\IIS\<host>`) instead — see Phase 5/6
@@ -1433,6 +1436,12 @@ fix is usually smaller than the symptom suggests.
   on a host running more than one tailer instance, like DC01 tailing
   both IIS and DNS)
 - Fix: distinct `-StateFilePath` per instance
+
+**Logstash stops processing events, but `Get-Service`/`Get-Process` both show it running**
+- Cause: JVM heap exhausted (`OutOfMemoryError: Java heap space`) —
+  pipeline worker threads are dead, but the process itself is still alive
+- Fix: set `-Xms`/`-Xmx` in `config/jvm.options`, confirm via the live
+  process's command line — see Sizing and retention
 
 ## What's next
 
