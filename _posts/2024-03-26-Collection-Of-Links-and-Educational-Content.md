@@ -142,6 +142,7 @@ This page hosts a collection of useful resources for IT Systems Admins and Engin
 | **Microsoft** (Copilot) | Proprietary models, integrated with Microsoft 365            | <a href="https://copilot.microsoft.com/" target="_blank">https://copilot.microsoft.com/</a> |
 | **xAI** (Grok)          | Proprietary models, integrated with X platform               | <a href="https://grok.com/" target="_blank">https://grok.com/</a>                         |
 | **LM Arena (LMSYS)**    | Open-source evaluation platform, Apache 2.0 licensed         | <a href="https://lmarena.ai" target="_blank">https://lmarena.ai</a>                         |
+| **OpenRouter**          | Unified API to hundreds of models across providers, pay-as-you-go pricing, OpenAI-compatible endpoint, automatic fallback routing | <a href="https://openrouter.ai" target="_blank">https://openrouter.ai</a>                    |
 
 ### General IT Skills
 
