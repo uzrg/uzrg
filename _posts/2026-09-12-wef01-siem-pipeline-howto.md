@@ -71,8 +71,8 @@ Forwarding subscription or an Elastic Beats pipeline before.
                               v
              WEF01's shipping layer, built two independent ways:
 
-               Pipeline A:  Elastic Agent -> Logstash -> file output
-               Pipeline B:  Winlogbeat ----------------> file output
+               Approach A:  Elastic Agent -> Logstash -> file output
+               Approach B:  Winlogbeat ----------------> file output
                             Filebeat ------------------> file output
 
                               |
@@ -104,9 +104,9 @@ Forwarding subscription or an Elastic Beats pipeline before.
 Nothing special here beyond your normal VM build: clone from template,
 join the domain, land the computer object in your servers OU (not the
 default `CN=Computers` container — new AD objects should always go
-somewhere deliberate, and btw you probably remember that you can't
-link GPOs to those built-in containers...!). Give it a second data
-disk (`D:`) — you'll want somewhere other than the OS disk for log
+somewhere deliberate, and it's worth remembering you can't link GPOs
+to those built-in containers at all). Give it a second data disk
+(`D:`) — you'll want somewhere other than the OS disk for log
 output, the IIS/DNS drop share, and eventually Logstash's own install.
 
 Sizing: 2 vCPU / 4 GB is enough to start. The JVM inside Logstash is
@@ -127,7 +127,14 @@ being edited again later.
   `attack.tactic` / `attack.technique` fields for free. This lab used
   the repo's `sysmonconfig-with-filedelete.xml` variant for the added
   file-delete visibility. Pin the exact commit you pull the config
-  from, same as you'd pin the Sysmon binary version.
+  from, same as you'd pin the Sysmon binary version — an unpinned
+  `main`-branch fetch means every fleet-wide re-deploy risks pulling a
+  config the rest of this guide wasn't written against:
+  ```powershell
+  Invoke-WebRequest "https://raw.githubusercontent.com/olafhartong/sysmon-modular/<commit-sha>/sysmonconfig-with-filedelete.xml" `
+      -OutFile 'sysmonconfig.xml'
+  Get-FileHash 'sysmonconfig.xml' -Algorithm SHA256   # record this alongside the commit SHA
+  ```
   One thing to know before building that dissect: the subscriptions in
   Phase 3 use `<ContentFormat>RenderedText</ContentFormat>`, which
   delivers Sysmon's `RuleName` field embedded inside the rendered
@@ -180,7 +187,7 @@ wevtutil gl Microsoft-Windows-Sysmon/Operational | Select-String channelAccess
 wevtutil gl Security | Select-String channelAccess
 ```
 
-Security's SDDL includes `(A;;CC;;;NS)`; Sysmon's does not include any
+Security's SDDL includes `(A;;0x1;;;NS)`; Sysmon's does not include any
 `;NS)` ACE at all. Fix it (idempotent, safe to re-run on a channel that
 already has the grant):
 
@@ -188,6 +195,12 @@ already has the grant):
 $channel = 'Microsoft-Windows-Sysmon/Operational'
 $sddl = (wevtutil gl $channel | Select-String 'channelAccess').ToString() -replace 'channelAccess:\s*', ''
 if ($sddl -notmatch ';NS\)') {
+    # 0x1 is this build's grant, not a generic Windows access mask - Event Log
+    # channel ACEs use their own scheme (1=Read, 2=Write, 4=Clear), unrelated
+    # to file/registry/AD access masks. There's also no SACL segment to worry
+    # about landing this in by mistake: unlike a full object SDDL, channelAccess
+    # strings from wevtutil never carry an S: portion, so appending after the
+    # last DACL ACE is always the correct, complete string.
     wevtutil sl $channel "/ca:$($sddl)(A;;0x1;;;NS)"
 }
 ```
@@ -197,7 +210,7 @@ locally as Administrator/SYSTEM but a service or subscription can't
 consume it, look at what identity that service actually runs as, and
 diff its permissions against something that already works. That
 technique found this in minutes once applied; guessing at "maybe the
-config is wrong" or "maybe reinstall it" cost a lot more time!
+config is wrong" or "maybe reinstall it" cost a lot more time.
 
 ## Phase 3 — The collector role, three GPOs, three subscriptions
 
@@ -333,7 +346,10 @@ service accounts, or dropping an event class entirely once you've
 confirmed nobody's actually
 consuming it downstream.
 
-### A subtle failure that looks like a permissions bug but isn't
+![All three WEC subscriptions active, each with real source counts]({{ '/assets/img/gallery/wef01-wec-subscriptions-active.png' | relative_url }})
+_All three tiers live on WEF01: 2 domain controllers, 18 member servers, 1 workstation, each forwarding to the same `ForwardedEvents` log_
+
+### A subtle failure that looks like a permissions issue but isn't
 
 If you scope a subscription to a **custom** AD security group instead
 of individual computer SIDs, don't be surprised if newly-added members
@@ -346,13 +362,16 @@ at boot. A machine that was already running when it got added to the
 group has a cached ticket that simply doesn't know about the new
 membership yet.
 
-**Fix**: reboot the machine after adding it to the forwarding group,
-then force a retry:
+**Fix**: reboot the machine after adding it to the forwarding group —
+that's what actually gets a fresh TGT with the new group membership
+baked in, not a service restart or a policy refresh — then force a
+retry instead of waiting for the subscription's normal refresh
+interval:
 
 ```powershell
-gpupdate /force /target:computer
-Restart-Service EventLog
-wecutil rs <SubscriptionName>
+Restart-Computer -Force
+# once it's back up:
+wecutil rs '<SubscriptionName>'
 ```
 
 A separate, unrelated authorization layer needs widening too, or
@@ -384,7 +403,20 @@ The default out-of-the-box SDDL looks like
 — note there's no `AU` (Authenticated Users) ACE in the `D:` (DACL)
 portion before `S:P` (the system audit ACL) begins. The fix above
 inserts the missing ACE right before that boundary, which is where the
-DACL always ends in this SDDL shape.
+DACL always ends in this SDDL shape — it's a DACL insert, not a SACL
+one: everything before `S:P` is still the DACL, `S:P` is only where the
+*next* section (the SACL) begins.
+
+Be clear about what this actually opens, though: `(A;;GR;;;AU)` is a
+deliberate widening of an authorization boundary, not a narrow one.
+Every authenticated domain principal can now reach the Event
+Forwarding Plugin over WinRM — this grant has no concept of which
+subscriptions or events a given machine should see, only whether it
+can talk to the plugin at all. Subscription-level scoping
+(`AllowedSourceDomainComputers` in Phase 3's XML) is the actual
+control that limits which principals can forward which events; this
+SDDL fix is a prerequisite for that scoping to matter, not a
+replacement for it.
 
 ## Phase 4 — Linux and network-device syslog
 
@@ -408,6 +440,9 @@ way — if your firewall is a shared, hands-off appliance in your
 environment the way pfSense is in this lab, that's a change for
 whoever owns it, not something to make unilaterally.
 
+![Real UBUNTU01 syslog content landing in SyslogDrop]({{ '/assets/img/gallery/wef01-syslog-ubuntu01-content.png' | relative_url }})
+_`syslog-1.log` on WEF01, systemd unit activity from UBUNTU01 — real content, not a connectivity test_
+
 ## Phase 5 — File-based logs: IIS and DNS, near-real time
 
 Windows Event Forwarding can't handle IIS log files or DNS's debug text
@@ -427,12 +462,72 @@ they happen:
   why hostname-first ordering is a real trap, not just a style
   choice). If a host runs more than one instance of this tailer — DC01
   here, tailing both IIS and DNS — each instance needs its own state
-  file, not the shared default (see the real bug that caused, below).
+  file, not the shared default (see the real issue that caused, below).
 - Run it as a Scheduled Task, "At startup," restart-on-failure.
 - DNS's live Analytical channel turns out to be a dead end for
   forwarding — see the callout below — so DNS uses the classic debug
   text-file log (`Set-DnsServerDiagnostics -EnableLoggingToFile`)
   shipped through the exact same tailer/drop-share pattern as IIS.
+
+The share needs a real ACL before any of this matters — everything
+downstream treats whatever lands in `LogDrop` as legitimate, so a
+share that's writable by more than it needs to be has no integrity
+guarantee at all. Create the writer group first — same as
+`WEF-MemberServers` and the other forwarding groups, it lands in
+`OU=Groups,OU=LabOU`, not the default `CN=Users` container — then
+membership, then the share and its ACL, all on WEF01:
+
+```powershell
+New-ADGroup -Name 'WEF-LogDrop-Writers' -GroupCategory Security -GroupScope DomainLocal `
+    -Path 'OU=Groups,OU=LabOU,DC=myhomelab,DC=hv,DC=lab'
+
+# every IIS/DNS host running Phase 5's tailer, by its computer account -
+# DEVOPS01 and DC01/DC02 shown here as the running examples used
+# elsewhere in this guide; add every other tailer host the same way
+Add-ADGroupMember -Identity 'WEF-LogDrop-Writers' -Members 'DEVOPS01$', 'DC01$', 'DC02$'
+
+New-Item -Path 'D:\LogDrop' -ItemType Directory -Force
+
+# No -FullAccess for WEF01$ here - the shipper reads D:\LogDrop
+# directly on WEF01, never over \\WEF01\LogDrop, so the machine
+# account has no reason to hold share-level access at all. Grant the
+# share owner explicitly instead of leaving every access parameter
+# unset: New-SmbShare defaults to Everyone:Read on the share itself
+# when none is given, which is a wider grant than either option here.
+New-SmbShare -Name 'LogDrop' -Path 'D:\LogDrop' -FullAccess 'BUILTIN\Administrators'
+Grant-SmbShareAccess -Name 'LogDrop' -AccountName 'WEF-LogDrop-Writers' -AccessRight Change -Force
+
+# The NTFS ACL is the layer that actually governs local read access on
+# WEF01 itself, and Get-Acl returns D:\'s inherited entries along with
+# the folder's own - adding a rule on top of that leaves whatever was
+# already inherited (BUILTIN\Users among it, on a default-formatted
+# data volume) still in effect. Break inheritance explicitly instead
+# of assuming the new rule is the only one that applies:
+$acl = Get-Acl 'D:\LogDrop'
+$acl.SetAccessRuleProtection($true, $false)   # protect + drop inherited ACEs
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'WEF-LogDrop-Writers', 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+# Breaking inheritance strips SYSTEM's access too, along with everything
+# else - re-add it explicitly, or the shipper (running as SYSTEM on
+# WEF01) silently loses read access to the files it's supposed to ship:
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'NT AUTHORITY\SYSTEM', 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'BUILTIN\Administrators', 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+Set-Acl 'D:\LogDrop' $acl
+```
+
+`WEF-LogDrop-Writers` holds **computer** accounts, not user accounts —
+the Scheduled Task below runs the tailer as `SYSTEM`, so it's the
+machine's own identity, not a logged-on user's, that actually reaches
+the share over the network. Forgetting the trailing `$` when adding a
+member is a common way to end up granting a nonexistent user object
+instead of the real computer account. The shipper side (Elastic Agent
+/ Winlogbeat / Filebeat) never touches the *share* at all — it reads
+the already-landed files locally on WEF01, so it needs no SMB grant —
+but it does need the NTFS `SYSTEM` grant above, since it's still
+subject to the same local filesystem ACL as anything else reading
+`D:\LogDrop` on the box.
 
 Here's the actual tailer, unedited from this build — it runs unchanged
 on every IIS host and on the DNS servers alike, just pointed at a
@@ -473,8 +568,16 @@ $sweepIntervalSeconds = 15
 # offsets without racing each other.
 $sync = [hashtable]::Synchronized(@{})
 if (Test-Path $stateFile) {
-    (Get-Content -Raw $stateFile | ConvertFrom-Json).PSObject.Properties |
-        ForEach-Object { $sync[$_.Name] = [int64]$_.Value }
+    try {
+        (Get-Content -Raw $stateFile | ConvertFrom-Json).PSObject.Properties |
+            ForEach-Object { $sync[$_.Name] = [int64]$_.Value }
+    } catch {
+        # A state file can end up truncated if the process was killed
+        # mid-write. Starting clean (re-ingesting from offset 0 on next
+        # write) beats a scheduled task that crash-loops forever because
+        # startup itself throws on a JSON parse.
+        Write-Warning "State file $stateFile is unreadable, starting clean: $($_.Exception.Message)"
+    }
 }
 
 function Copy-NewBytes {
@@ -492,10 +595,11 @@ function Copy-NewBytes {
     try {
         # For an IIS source (...\LogFiles\W3SVC1\u_ex....log) this
         # correctly yields the site ID, W3SVC1. For DNS's debug log
-        # (C:\Windows\System32\dns\dns.log) it yields "System32" -
-        # cosmetic, not a bug: Filebeat's glob matches on the IIS/DNS
-        # segment one level up in the drop-share path, not on this
-        # folder name, so a nonsense-looking "System32" subfolder here
+        # (C:\Windows\System32\dns\dns.log) it yields "dns" - a
+        # redundant-looking extra "dns" segment in the drop-share path
+        # (LogDrop\DNS\<host>\dns\...), not an issue: Filebeat's glob
+        # matches on the IIS/DNS segment one level up in the drop-share
+        # path, not on this folder name, so the duplicate "dns" here
         # doesn't break anything downstream.
         $siteFolder = Split-Path (Split-Path $SourcePath -Parent) -Leaf
         $destPath = Join-Path $DropShare "$siteFolder\$($file.Name)"
@@ -514,7 +618,14 @@ function Copy-NewBytes {
         $destStream.Close()
 
         $Sync[$SourcePath] = $file.Length
-        ($Sync | ConvertTo-Json) | Set-Content -Path $StateFile -Encoding utf8
+        # Write-then-rename rather than writing $StateFile directly - the
+        # Changed-event handler and the periodic sweep can both reach this
+        # line close together, and a torn write from two overlapping
+        # writers is a worse failure than one of them losing this pass's
+        # update (which the next pass corrects anyway).
+        $tempFile = "$StateFile.tmp"
+        ($Sync | ConvertTo-Json) | Set-Content -Path $tempFile -Encoding utf8
+        Move-Item -Path $tempFile -Destination $StateFile -Force
     } catch {
         Write-Warning "Skipped $SourcePath this pass: $($_.Exception.Message)"
     }
@@ -531,7 +642,7 @@ $watchers = foreach ($dir in $LogDirectories) {
     # variables and functions are visible here directly. $using: does
     # NOT apply in this context (it's only meaningful for
     # remoting/ForEach-Object -Parallel) and throws on every event if
-    # used here - a real bug hit during this build, caught only
+    # used here - a real issue hit during this build, caught only
     # because nothing was being copied despite the process staying
     # alive with no visible error.
     Register-ObjectEvent -InputObject $w -EventName Changed -Action {
@@ -569,7 +680,7 @@ Register-ScheduledTask -TaskName 'LogTailer' -Action $action -Trigger $trigger `
     -Settings $settings -User 'SYSTEM' -RunLevel Highest
 ```
 
-**A real bug this exact script hit, found on the one host running two
+**A real issue this exact script hit, found on the one host running two
 instances of it**: DC01 tails both its own IIS logs and DNS's debug
 log, as two separate scheduled tasks running the same script content
 under different names. Both instances defaulted to the same state
@@ -583,6 +694,16 @@ path (e.g. `iis-tailer-state.json` vs `dns-tailer-state.json`) rather
 than relying on the default. A host running only one instance of this
 script never hits this — it's specific to any host, like DC01 here,
 that has more than one reason to run it.
+
+Both sources landing in the type-first layout, viewed locally on WEF01
+— `LogDrop\IIS\<host>\` and `LogDrop\DNS\<host>\`, exactly as Phase 6's
+tier-tagging filter depends on:
+
+![IIS logs landing in LogDrop\IIS\DC01\W3SVC1]({{ '/assets/img/gallery/wef01-logdrop-iis-typefirst.png' | relative_url }})
+_DC01's own IIS logs, tailed and landed under the type-first path_
+
+![DNS debug logs landing in LogDrop\DNS\DC01\dns]({{ '/assets/img/gallery/wef01-logdrop-dns-typefirst.png' | relative_url }})
+_DC01's DNS debug log, same pattern — note the harmless extra `dns` segment from the site-folder derivation_
 
 ### Why DNS can't just forward its Analytical channel
 
@@ -625,25 +746,80 @@ pipelines' rotating output, and the IIS/DNS drop-share all share it.
 The two output styles behave very differently, and only one of them is
 actually bounded:
 
-- **Logstash's file output is unbounded.** `wef-events-<date>.log`
-  rotates daily, not by size, and nothing caps how large that single
-  file gets in between. On a busy day mid-build it hit **8 GB** before
-  rolling over — that's a data point tied to this build's source
-  volume and Sysmon-host count, not a ceiling you can plan against
-  directly. Measure your own volume before sizing the disk.
+- **Logstash's file output started out unbounded, and that genuinely
+  caught up with this build.** `wef-events-<date>.log` rotated daily,
+  not by size, and nothing capped how large a single day's file got in
+  between. An early busy day hit 8 GB before rolling over — noted at
+  the time as "a data point, not a ceiling." A later day proved that
+  right the hard way: **34.7 GB in one file**, on a 60 GB disk, free
+  space down to under 9 GB before anyone caught it. The fix, deployed
+  and verified on this exact build:
+  - **Hourly buckets, not daily.** The `file` output plugin has no
+    native size-based rotation — only date-pattern path rotation is
+    real (confirmed against the current plugin docs, not assumed).
+    `wef-events-%{+YYYY-MM-dd-HH}.log` bounds the worst case to about
+    an hour of volume per file instead of a full day.
+  - **An adaptive cleanup Scheduled Task**, hourly, purging files past
+    a retention window that tightens as free space drops — 24h
+    normally, 12h under 20 GB free, 6h under 10 GB — rather than one
+    fixed window sized for an average day that a bad day blows through.
+    Running it once reclaimed the stale 34.7 GB file immediately:
+    8.4 GB free went to 56 GB in seconds.
+  - The drop-share needs the same kind of cleanup task regardless (see
+    below) — this is that same maintenance pattern applied a second
+    time, not new work.
 - **The Beats outputs are bounded.** `rotate_every_kb: 102400` ×
   `number_of_files: 10` caps each Beat's retained history at roughly
   **1 GB**, oldest file dropped automatically as new ones roll in.
 
-Don't leave Logstash's side open-ended: add the same kind of
-size-based rotation to its file output, or put a cleanup Scheduled
-Task on `D:\LogstashOut\` — the drop-share needs one regardless (see
-below), so this is the same maintenance task applied to a second
-directory, not new work.
+Don't take "bounded" as "sized correctly for your volume," though —
+1 GB of retained history and 24h of hourly Logstash buckets are both
+just this build's starting point. Watch real free space, not just
+whether a cap exists at all.
+
+The cleanup script, unedited from this build — the retention window
+tightens itself instead of assuming every day looks like an average
+one:
+
+```powershell
+# Cleanup-LogstashOut.ps1 - bounds D:\LogstashOut total size.
+# Hourly output files bound the size of any ONE file; this bounds how
+# many of them accumulate. Retention tightens automatically if free
+# space is already under pressure, rather than a single fixed window
+# that assumes today's volume looks like every other day's.
+$logstashOutPath = 'D:\LogstashOut'
+$freeGB = (Get-PSDrive D).Free / 1GB
+$retentionHours = if ($freeGB -lt 10) { 6 } elseif ($freeGB -lt 20) { 12 } else { 24 }
+Get-ChildItem -Path $logstashOutPath -File -Filter 'wef-events-*.log' -ErrorAction SilentlyContinue |
+    Where-Object LastWriteTime -lt (Get-Date).AddHours(-$retentionHours) |
+    Remove-Item -Force
+```
+
+Registered as an hourly Scheduled Task the same way the drop-share
+cleanup task is (below) — `-Once -At (Get-Date)` with an hourly
+`-RepetitionInterval` is the pattern for "run on a recurring schedule
+starting now," not the one-shot it looks like at a glance:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument `
+    '-NoProfile -ExecutionPolicy Bypass -File D:\Logstash\Cleanup-LogstashOut.ps1'
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+    -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+Register-ScheduledTask -TaskName 'WEF-LogstashOut-Cleanup' -Action $action -Trigger $trigger `
+    -User 'NT AUTHORITY\SYSTEM' -RunLevel Highest
+```
+
+`-RepetitionDuration ([TimeSpan]::MaxValue)` looks like the obvious
+choice for "run forever" and fails outright — `Register-ScheduledTask`
+rejects it with "The task XML contains a value which is incorrectly
+formatted or out of range," because the underlying Task Scheduler XML
+schema can't represent a duration that large. A long-but-bounded span
+like 3650 days works fine and means the same thing in practice.
 
 **Logstash's JVM heap — a real incident, not a hypothetical.** This
-build's `jvm.options` shipped with no explicit `-Xms`/`-Xmx`, so it
-defaulted to 1 GB. That default ran out for real:
+build's `jvm.options` shipped with Logstash's own stock `-Xms1g`/
+`-Xmx1g` defaults untouched — nobody had a reason to raise them yet.
+Stock defaults ran out for real:
 `java.lang.OutOfMemoryError: Java heap space`, both pipeline worker
 threads dead, Logstash down — triggered once WEF01's own Sysmon volume
 spiked after the MECM/SCOM agents landed on the box itself (see "What's
@@ -655,7 +831,15 @@ Two things worth taking from this, not just the number:
 
 - **Don't treat any heap-sizing recommendation — including this
   post's own — as fixed.** Watch actual JVM memory under real load and
-  raise it before you hit the wall, not after.
+  raise it before you hit the wall, not after. Logstash's own
+  monitoring API gives you the real numbers without guessing from
+  `Get-Process`:
+  ```powershell
+  (Invoke-RestMethod http://localhost:9600/_node/stats/jvm).jvm.mem.heap_used_percent
+  ```
+  Trending that over time — not just checking it once — is what would
+  have shown this build's heap climbing toward the wall before it hit
+  it, rather than finding out from a `FATAL` line after the fact.
 - **The crash was silent.** `Get-Process java` kept showing a live
   process the entire time Logstash was down; only the log's `FATAL`
   entries said anything was wrong. Same lesson this build keeps
@@ -694,6 +878,24 @@ instead of a live crash-and-restart cycle:
 & 'D:\Logstash\bin\logstash.bat' -f 'D:\Logstash\config\wef01-pipeline.conf' --config.test_and_exit
 ```
 
+**The `ForwardedEvents` channel itself has a size cap, and it's not
+generous.** `wevtutil gl ForwardedEvents` on this build's own WEF01
+shows `maxSize: 20971520` — 20 MB, `retention: false` — the default,
+never touched by anything in this guide. Every event from the whole
+fleet lands in that one channel before Elastic Agent or Winlogbeat
+ever reads it, and at fleet-wide volume 20 MB wraps fast; once it
+does, `retention: false` means old events are gone, not archived. Size
+it up before that matters, not after:
+
+```powershell
+wevtutil sl ForwardedEvents /ms:1073741824   # 1 GB
+```
+
+The right number scales with fleet size and how long a shipper outage
+should be survivable without losing events — a shipper that's down for
+an hour needs the channel to hold at least an hour's worth of the
+fleet's real forwarding volume, not just look big on paper.
+
 **DNS debug logging volume.** Phase 5's workaround — classic
 `Set-DnsServerDiagnostics -EnableLoggingToFile` — is verbose by
 design: every query gets a line, not just the interesting ones, and a
@@ -724,39 +926,47 @@ Get-ChildItem 'D:\LogDrop' -Recurse -File |
 Every port this build needs open, in one place instead of scattered
 across phases:
 
-**TCP 5985, inbound on WEF01** — WinRM. Subscription manager plus
+**TCP 5985, inbound on WEF01**: WinRM — subscription manager plus
 event push from every forwarding source.
 
-**UDP 514, inbound on WEF01** — syslog from Linux and network devices
+**UDP 514, inbound on WEF01**: syslog from Linux and network devices
 (Phase 4). Only UDP is used anywhere in this build — Phase 4's sender
 config and Phase 6's collector input are both UDP. Open TCP 514 too
 only if a specific sender actually needs it; don't open it by default.
 
-**UDP 5514, inbound on WEF01** — Filebeat's demo syslog listener
-(Phase 6B only). Skip it if you're not running the side-by-side
+**UDP 5514, inbound on WEF01**: Filebeat's demo syslog listener
+(approach B only). Skip it if you're not running the side-by-side
 comparison.
 
-**TCP 5044, loopback only on WEF01** — Beats to Logstash. Never leaves
+**TCP 5044, loopback only on WEF01**: Beats to Logstash — never leaves
 the host.
 
+**TCP 445, inbound on WEF01**: SMB, for the `\\WEF01\LogDrop\` share —
+every IIS and DNS host running Phase 5's tailer writes here. Easy to
+overlook because nothing else in this build touches SMB, but the
+tailer is silently dead without it: `File and Printer Sharing (SMB-In)`
+isn't reliably on by default on every profile, and a fresh Windows
+install won't have it enabled just because you created a share.
+
 That's it — nothing else needs a rule anywhere. Every source machine
-only makes outbound connections (pushing events, forwarding syslog,
-writing to the drop-share), so DC01/DC02, the member servers, and the
-workstations need nothing opened at all. Outbound 5985 is what
-actually carries that traffic from each source, and it's allowed by
-default on a stock Windows firewall — but if yours is locked down past
-the out-of-the-box profile, verify outbound 5985 explicitly. Inbound
-being covered on WEF01's side proves nothing about outbound elsewhere.
+only makes outbound connections (pushing events over WinRM, forwarding
+syslog, writing to the drop-share over SMB), so DC01/DC02, the member
+servers, and the workstations need nothing opened at all. Outbound
+5985 and outbound 445 are what actually carry that traffic from each
+source, and both are allowed by default on a stock Windows firewall —
+but if yours is locked down past the out-of-the-box profile, verify
+both explicitly. Inbound being covered on WEF01's side proves nothing
+about outbound elsewhere.
 
 One thing to know if WinRM has never been touched on WEF01 before this
 build: `winrm quickconfig -force` (Phase 3) is what binds the WinRM
 listener to the network interface in the first place. A fresh Windows
-install has the WinRM *service* running, but its listener stays
-effectively loopback-only until `quickconfig` — or the equivalent
-GPO-driven listener creation — opens a real HTTP listener and the
-matching firewall rule. Run `wecutil qc` without `winrm quickconfig`
-and you'll get a subscription that looks correctly configured with no
-listener for anything to actually reach.
+install has the WinRM *service* running, but no listener configured
+at all — not even a loopback one — until `quickconfig` — or the
+equivalent GPO-driven listener creation — opens a real HTTP listener
+and the matching firewall rule. Run `wecutil qc` without `winrm
+quickconfig` and you'll get a subscription that looks correctly
+configured with no listener for anything to actually reach.
 
 ## Production hardening (out of scope here, but worth knowing)
 
@@ -776,6 +986,10 @@ handling real user data:
   The moment Logstash lives on a different host than its shippers,
   that link needs TLS (`ssl_enabled` on both the beats input and each
   shipper's output) — not a plaintext hop across the network.
+- **The `LogDrop` share** carries IIS and DNS log content — hostnames,
+  URLs, query names — over plain SMB. Without SMB signing (mandatory)
+  and SMB encryption enabled on the share, that traffic is readable to
+  anyone who can see the wire between an IIS/DNS host and WEF01.
 
 None of this blocks anything in this guide. It's the list to work
 through before this pattern leaves a lab.
@@ -837,10 +1051,10 @@ of it needs to know or care. One real gotcha in how it's launched: this
 build's scheduled task runs Logstash with
 `-f D:\Logstash\config\wef01-pipeline.conf` directly, and passing `-f`
 on the command line makes Logstash **ignore `pipelines.yml`
-entirely** (it logs `Ignoring the 'pipelines.yml' file because command
-line options are specified`). If you're used to multi-pipeline setups
-via `pipelines.yml`, know that a single `-f` flag overrides that whole
-mechanism instead of adding to it.
+entirely** (it logs `Ignoring the 'pipelines.yml' file because
+modules or command line options are specified`). If you're used to
+multi-pipeline setups via `pipelines.yml`, know that a single `-f`
+flag overrides that whole mechanism instead of adding to it.
 
 ```
 input {
@@ -862,10 +1076,17 @@ filter {
   # all a hostname) can appear between "LogDrop" and the type segment
   # that immediately follows it. A bare /IIS/ or /DNS/ substring match
   # against a host-first layout doesn't have that guarantee - see the
-  # callout below for the real, live bug that came from exactly this.
+  # callout below for the real, live issue that came from exactly this.
   if [event][dataset] == "windows.forwarded" {
     mutate { add_field => { "[wef][tier]" => "windows_event_forwarding" } }
-  } else if [event][dataset] =~ /^syslog/ or [log][source][address] {
+  } else if [event][dataset] == "udp.syslog" {
+    # Match Phase 6's own udp input exactly (data_stream.dataset:
+    # udp.syslog) rather than a /^syslog/ regex - that regex looks
+    # plausible but never actually matches this build's real dataset
+    # value, which starts with "udp.", not "syslog". An exact match
+    # here also removes the earlier fallback on [log][source][address]
+    # being merely truthy, which had no way to rule out a non-syslog
+    # event that happened to carry an address field of its own.
     mutate { add_field => { "[wef][tier]" => "syslog" } }
   } else if [log][file][path] =~ /LogDrop\\IIS/ {
     mutate { add_field => { "[wef][tier]" => "iis" } }
@@ -876,7 +1097,9 @@ filter {
 
 output {
   file {
-    path => "D:/LogstashOut/wef-events-%{+YYYY-MM-dd}.log"
+    # Hourly, not daily - see Sizing and retention for why a single
+    # day's file reaching 34.7 GB made this a real fix, not a nice-to-have.
+    path => "D:/LogstashOut/wef-events-%{+YYYY-MM-dd-HH}.log"
     codec => json_lines
   }
 }
@@ -935,8 +1158,8 @@ history:
    `/LogDrop/` regex.** It catches both IIS and DNS paths — they both
    live under `\\WEF01\LogDrop\<host>\...` — and mislabeled every DNS
    event as `"iis"`. This ran unnoticed in production for a full day.
-   Lesson: query your tagged data occasionally. Don't assume a filter
-   you wrote once still does what you think.
+   **Lesson**: query your tagged data occasionally. Don't assume a
+   filter you wrote once still does what you think.
 2. **The first attempt to fix it made things worse.** A path-segment
    regex like `/LogDrop\\[^\\]+\\IIS\\/` — a literal backslash right
    up against the closing `/` delimiter — broke Logstash's own config
@@ -949,7 +1172,7 @@ history:
    adds an escaping trap for no real benefit. `--config.test_and_exit`
    (below) would have caught this in seconds instead of a live
    crash-and-restart cycle. That bare-substring version isn't what
-   ships, though — it traded the escaping bug for a different
+   ships, though — it traded the escaping issue for a different
    collision problem, fixed in finding 3 below. Don't stop reading
    here and adopt it as-is.
 3. **The bare substring fix still had a real tradeoff, caught in
@@ -1001,7 +1224,7 @@ each event with which collection path it arrived through. The other
 concrete example worth showing is the one this whole build was set up
 for back in Phase 2: turning `sysmon-modular`'s ATT&CK-labeled rule
 names into structured fields, which is exactly the kind of thing
-Pipeline A's Logstash filters can do that Pipeline B's Beats-only
+approach A's Logstash filters can do that approach B's Beats-only
 processors realistically can't.
 
 Recall the `RenderedText` caveat from Phase 2: Sysmon's `RuleName`
@@ -1016,7 +1239,12 @@ gets you there:
 filter {
   if [winlog][channel] == "Microsoft-Windows-Sysmon/Operational" {
     grok {
-      match => { "message" => "RuleName:\s*%{DATA:sysmon_rule}\n" }
+      # \r?\n, not a bare \n - RenderedText line endings are CRLF on
+      # Windows. A bare \n still "matches" against CRLF text since
+      # grok's \n only needs the LF half, but it leaves a trailing \r
+      # stuck on the end of sysmon_rule, silently polluting whatever
+      # that field flows into downstream.
+      match => { "message" => "RuleName:\s*%{DATA:sysmon_rule}\r?\n" }
     }
     if [sysmon_rule] and [sysmon_rule] != "-" {
       grok {
@@ -1039,7 +1267,17 @@ noise. Verify this the same way as the tier-tagging filter: a
 `attack.technique` in the output, before trusting it against the full
 volume.
 
-## Phase 7 — Verify pipeline A actually works
+The cost of that quiet failure mode: once `tag_on_failure => []` is in
+place, a future `sysmon-modular` release that changes its rule-name
+format wouldn't raise any error at all — every event would just quietly
+stop getting `attack.technique` populated. Nothing here catches that on
+its own; it takes noticing the ATT&CK fields went empty, the same way
+the tier-mislabeling issue above (the tier-tagging filter's own "three
+real, live findings") went unnoticed for a full day. Query your
+enriched fields occasionally, not just when something's visibly
+broken.
+
+## Phase 7 — Verify approach A actually works
 
 Trigger one identifiable event per source tier and confirm it lands the
 whole way through: source's local Event Log → WEF01's own
@@ -1047,7 +1285,14 @@ whole way through: source's local Event Log → WEF01's own
 this independently for the DC tier, syslog, IIS, and DNS — each
 mechanism can silently fail on its own without affecting the others.
 
-**A verification bug worth naming**: searching Logstash's output for
+The first hop, confirmed: WEF01's own local `ForwardedEvents` channel,
+7,119 events in and climbing, a Sysmon registry-delete event forwarded
+from MECM02 —
+
+![WEF01's local ForwardedEvents channel with a real Sysmon event forwarded from MECM02]({{ '/assets/img/gallery/wef01-forwarded-events-sysmon.png' | relative_url }})
+_Event 12, `RuleName: -` — one of the generic rules Enrichment's `tag_on_failure` is there to skip quietly instead of tagging as a parse failure_
+
+**A verification issue worth naming**: searching Logstash's output for
 `"hostname":"WKS01"` on a winlog-sourced event will find nothing, even
 when the pipeline is completely healthy — that field always shows the
 agent host (WEF01), not the original source. The field that actually
@@ -1121,6 +1366,12 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 [System.IO.Compression.ZipFile]::ExtractToDirectory(
     'C:\Install\winlogbeat-9.5.3-windows-x86_64.zip', 'C:\Install\extract')
+# If 'C:\Program Files\Winlogbeat' already exists - a re-run after a
+# failed attempt - Move-Item nests the source inside it instead of
+# replacing it. Clear the way first rather than discovering that later.
+if (Test-Path 'C:\Program Files\Winlogbeat') {
+    Remove-Item 'C:\Program Files\Winlogbeat' -Recurse -Force
+}
 Move-Item 'C:\Install\extract\winlogbeat-9.5.3-windows-x86_64' 'C:\Program Files\Winlogbeat'
 
 # repeat for filebeat, then from inside each install directory:
@@ -1223,18 +1474,32 @@ filebeat.inputs:
       - syslog:
           field: message
           format: auto
+      - add_fields:
+          target: wef
+          fields:
+            tier: syslog
 
   - type: filestream
     id: iis-logdrop-demo
     paths:
       - 'D:\LogDrop\IIS\*\*\*.log'
     tags: [iis, demo]
+    processors:
+      - add_fields:
+          target: wef
+          fields:
+            tier: iis
 
   - type: filestream
     id: dns-logdrop-demo
     paths:
       - 'D:\LogDrop\DNS\*\*\*.log'
     tags: [dns, demo]
+    processors:
+      - add_fields:
+          target: wef
+          fields:
+            tier: dns
 
 output.file:
   path: "D:\\FilebeatOut"
@@ -1257,6 +1522,16 @@ logging.files:
   keepfiles: 7
 ```
 
+The `add_fields` on each input sets `wef.tier`, matching the field
+name approach A's Logstash filter produces — without it, this
+pipeline's events would carry `tags: [iis]` / `[dns]` / `[syslog]`
+instead, a different output shape than approach A for no reason other
+than nobody having wired it up. This is the extent of what a Beat's
+processor set can do here, and it's genuinely enough for it: a static
+per-input tag is a different problem than the multi-stage grok
+Enrichment above needs for ATT&CK labels, which Beats' own processors
+aren't built for — see that section for why.
+
 Two things worth calling out explicitly, because both are the kind of
 detail that only shows up once you actually run the thing:
 
@@ -1275,7 +1550,7 @@ uses in Phase 6, so learning it once covers both pipelines.
 
 **Two Beats/agents can tail the same file with zero conflict.**
 Filebeat's IIS/DNS `filestream` inputs above point at the exact same
-drop-share files Elastic Agent already tails in Pipeline A. Each
+drop-share files Elastic Agent already tails in approach A. Each
 shipper keeps its own independent read-offset registry, so there's no
 locking issue, no duplicate-detection problem, and no need to choose
 between running one pipeline or the other while you're evaluating both
@@ -1371,7 +1646,7 @@ Run this on WEF01 in place of Filebeat, then fire the same test-packet
 snippet from above (or point a real syslog sender at it) from another
 machine. If the message shows up here, the network path and firewall
 rule are both fine and any remaining problem is in Filebeat's own
-input config — a smaller, more specific thing to debug than "syslog
+input config — a smaller, more specific thing to troubleshoot than "syslog
 isn't working." If it doesn't show up, you've just ruled Filebeat out
 entirely and can go straight to checking routing and firewall rules
 instead of staring at a YAML file that was never the problem.
@@ -1381,22 +1656,35 @@ instead of staring at a YAML file that was never the problem.
 ### Elastic Agent + Logstash
 
 - **Processes to manage**: 2 (Agent, Logstash)
-- **Config surface**: one YAML per input type, plus one Logstash pipeline file
-- **Centralized management later (Fleet)**: built in, if you ever stand up Fleet/Kibana
-- **Resource footprint**: Logstash's JVM is the heaviest single piece either way
-- **Enrichment/routing before Kafka**: Logstash filters (dissect, aggregate, ECS mapping) — genuinely powerful
+- **Config surface**: one YAML per input type, plus one Logstash
+  pipeline file
+- **Centralized management later (Fleet)**: built in, if you ever
+  stand up Fleet/Kibana
+- **Resource footprint**: Logstash's JVM is the heaviest single
+  piece in this build, with or without enrichment filters running
+- **Enrichment/routing before Kafka**: Logstash filters (dissect,
+  aggregate, ECS mapping) — genuinely powerful
 - **Kafka cutover later**: swap Logstash's one output stanza
-- **Good first pipeline to learn on**: if you already know you'll want Logstash-side enrichment
+- **Good first pipeline to learn on**: if you already know you'll
+  want Logstash-side enrichment eventually — build that muscle
+  memory first
 
 ### Winlogbeat + Filebeat
 
 - **Processes to manage**: 2 (Winlogbeat, Filebeat)
 - **Config surface**: one YAML per Beat
-- **Centralized management later (Fleet)**: not available — no shared control plane
-- **Resource footprint**: slightly lighter without Logstash's JVM, if you skip enrichment
-- **Enrichment/routing before Kafka**: each Beat's own lighter processor set — less flexible, usually enough for straightforward shipping; see Enrichment above for a concrete example (the ATT&CK dissect) of the kind of multi-stage text parsing a Beat's processor set isn't really built for
+- **Centralized management later (Fleet)**: not available — no
+  shared control plane
+- **Resource footprint**: slightly lighter without Logstash's JVM,
+  if you skip enrichment
+- **Enrichment/routing before Kafka**: each Beat's own lighter
+  processor set — less flexible, usually enough for straightforward
+  shipping; see Enrichment above for a concrete example (the ATT&CK
+  dissect) of the kind of multi-stage text parsing a Beat's
+  processor set isn't really built for
 - **Kafka cutover later**: swap each Beat's one output stanza
-- **Good first pipeline to learn on**: if you want the simplest possible mental model — one Beat, one job
+- **Good first pipeline to learn on**: if you want the simplest
+  possible mental model — one Beat, one job
 
 Both are legitimate answers to "how do I ship these logs somewhere."
 If you want it as a decision rather than a table to weigh yourself:
@@ -1418,7 +1706,8 @@ troubleshooting either pipeline, check here before diving deep — the
 fix is usually smaller than the symptom suggests.
 
 **`Get-WinEvent -ListLog` on a Sysmon channel returns "log not found"**
-- Cause: wrong channel name — `Sysinternals-Sysmon` instead of `Sysmon`
+- Cause: wrong channel name — `Microsoft-Windows-Sysinternals-Sysmon/Operational`
+  instead of the real `Microsoft-Windows-Sysmon/Operational`
 - Fix: `wevtutil el | Select-String Sysmon` to get the real name
 
 **Subscription forwards everything except Sysmon; WSMan fault 1818**
@@ -1496,10 +1785,11 @@ fix is usually smaller than the symptom suggests.
 ## If something doesn't match this guide
 
 Every claim in this post came from checking the actual system state,
-not from assuming a service's "Running" status meant data was flowing —
-that distinction cost real debugging time more than once during this
-build, on both the Sysmon channel and, later, on what turned out to be
-nothing more than a stale file-size reading on a perfectly healthy
+not from assuming a service's "Running" status meant data was flowing
+— that distinction cost real troubleshooting time more than once
+during this build: on the Sysmon channel, on the Logstash heap crash
+that `Get-Process` never let on about, and later on what turned out to
+be nothing more than a stale file-size reading on a perfectly healthy
 Logstash output. If a step here doesn't produce what it says it should
 in your environment, read the actual content the pipeline is producing
 before trusting either the service status or a directory listing.
