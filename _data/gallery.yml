@@ -301,3 +301,33 @@
   category: Ubuntu Mail Server
   caption: "Landed in the inbox with no password ever entered, and, post-Gotcha-#3 fix, still populated after a reload"
   post: /posts/ubuntu-mail-server-howto/
+
+- file: wef01-wec-subscriptions-active.png
+  platform: Hyper-V Lab
+  category: WEF01 SIEM Pipeline
+  caption: "All three WEC subscriptions active: DC, member-server, and workstation tiers, each with real source counts"
+  post: /posts/wef01-siem-pipeline-howto/
+
+- file: wef01-forwarded-events-sysmon.png
+  platform: Hyper-V Lab
+  category: WEF01 SIEM Pipeline
+  caption: "WEF01's own ForwardedEvents channel, 7,119 events in, a Sysmon registry event forwarded from MECM02"
+  post: /posts/wef01-siem-pipeline-howto/
+
+- file: wef01-syslog-ubuntu01-content.png
+  platform: Hyper-V Lab
+  category: WEF01 SIEM Pipeline
+  caption: "Real UBUNTU01 syslog landing in SyslogDrop over the Phase 4 UDP listener"
+  post: /posts/wef01-siem-pipeline-howto/
+
+- file: wef01-logdrop-iis-typefirst.png
+  platform: Hyper-V Lab
+  category: WEF01 SIEM Pipeline
+  caption: "IIS logs landing in the type-first drop-share layout: LogDrop\\IIS\\DC01\\W3SVC1"
+  post: /posts/wef01-siem-pipeline-howto/
+
+- file: wef01-logdrop-dns-typefirst.png
+  platform: Hyper-V Lab
+  category: WEF01 SIEM Pipeline
+  caption: "DNS debug logs landing the same type-first way: LogDrop\\DNS\\DC01\\dns"
+  post: /posts/wef01-siem-pipeline-howto/
